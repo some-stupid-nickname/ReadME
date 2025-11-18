@@ -153,9 +153,9 @@ User Query → FastAPI Endpoint
 
 ## Команда
 
-- Разработчик 1: Frontend + Tech Lead
-- Разработчик 2: Backend + RAG
-- Разработчик 3: Data + Telegram Bot
+- Дима: Frontend + Telegram Bot + Tech Lead
+- Катя: Backend + RAG
+- Ксюша, Никита: Data + RAG
 
 ## Требования к коду
 
