@@ -220,7 +220,7 @@ setup = VectorDBSetup(batch_size=50)  # Default is 100
 
 ### Issue: Slow Embedding
 
-**Solution**: 
+**Solution**:
 - Use GPU if available (automatically detected)
 - Use smaller model: `paraphrase-MiniLM-L3-v2`
 - Process in chunks

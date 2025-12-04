@@ -14,6 +14,7 @@ globs: *
 - Switch to a dedicated branch for your changes.
 - After the vector DB is functional and tested, the branch can be uploaded and merged.
 - It is recommended to have separate `requirements.txt` files for each component (backend, frontend, telegram-bot) in a multi-component project.
+- Exclude large data files, `.specstory/` directories, and vector database storage from commits by adding them to the `.gitignore` file.
 
 ## TECH STACK
 - Qdrant (for vector database)
