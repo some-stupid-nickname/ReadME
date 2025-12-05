@@ -3,8 +3,9 @@
 Система на базе Retrieval-Augmented Generation для поиска и рекомендации книг с кратким обзором сюжета.
 
 ## Структура проекта
+
 ```
-backend/          # FastAPI + LangChain RAG pipeline
+backend/          # FastAPI + LangChain RAG pipeline (см. backend/README.md для настройки векторной БД)
 frontend/         # React веб-интерфейс
 telegram-bot/     # Telegram бот
 data/            
@@ -17,68 +18,63 @@ docs/             # Документация
 
 ## Технологический стек
 
-- **Backend:** FastAPI, LangChain, Qdrant
-- **LLM:** Mistral API, HuggingFace Inference
-- **Frontend:** React
-- **Bot:** python-telegram-bot
-- **Embeddings:** sentence-transformers
+Наш проект построен на современном стеке технологий для работы с большими языковыми моделями и векторным поиском. 
+Backend реализован на FastAPI с использованием фреймворка LangChain для построения RAG-пайплайна. 
+В качестве векторной базы данных используется Qdrant, которая хранит эмбеддинги всех книг из датасета. 
+Для генерации ответов задействован Mistral API, а также опционально HuggingFace Inference для резервных моделей.
+
+Эмбеддинги текстов генерируются через библиотеку sentence-transformers (модель all-MiniLM-L6-v2). 
+Frontend написан на React, а Telegram-бот использует библиотеку python-telegram-bot для взаимодействия с пользователями в мессенджере.
+
+## Данные
+
+В основе системы лежит датасет из **174,467 книг**, собранный из четырех источников на Kaggle: Google Books Dataset, Books Dataset, GoodReads 100k books и CMU Books Summary Dataset. Все данные были объединены, очищены и приведены к единой структуре. Для каждой книги хранится название, автор, дата публикации, описание и количество страниц (где доступно).
+
+Пропущенные значения (в первую очередь описания книг) были восстановлены с помощью Google Books API через асинхронные запросы. Итоговый датасет сохранен в файле `book_data_prepared.xlsx` размером 79.1 МБ. 
+На основе этих данных построена векторная база Qdrant (514.2 МБ), содержащая эмбеддинги всех книг для быстрого семантического поиска.
+
+**Ссылки на данные:**
+- [Итоговый датасет и сырые данные](https://drive.google.com/drive/folders/17La2w8ZsIB5Vu0nA3CGZgYhP7fqEM1hH) (Google Drive)
+- [Векторная база Qdrant](https://drive.google.com/drive/folders/1b20o7tnXicsZcupPpUf0xjYuo2mf76Fk) (Google Drive)
+- Подробности о структуре данных: `docs/Отчет_Чекпоинт 1.md`
+- Скрипт обработки: `data/scripts/data_preparation.ipynb`
 
 ## Документация
-- [API Reference](docs/API_SPECS.md)
-- [Развертывание](docs/DEPLOYMENT.md) (TODO)
+
+Полная техническая документация доступна в папке `docs/`:
+- [API Reference](docs/API_SPECS.md) — спецификация всех эндпоинтов backend API
+- [Настройка векторной БД](backend/README.md) — инструкции по развертыванию Qdrant и загрузке эмбеддингов
+- [Отчет по данным](docs/Отчет_Чекпоинт 1.md) — детали процесса сбора и подготовки датасета
 
 ## Как начать работу
 
-### 1. Клонировать репозиторий
+Проект использует Git Flow с рабочей веткой `develop` и feature-ветками для отдельных задач. Перед началом работы склонируйте репозиторий и переключитесь на ветку `develop`:
+
 ```bash
 git clone <url>
 cd llm-course-project
-```
-
-### 2. Создать feature-ветку для своей задачи
-```bash
 git checkout develop
 git pull
-git checkout -b feature/название-задачи
 ```
 
-### 3. Работать в своей ветке
+Когда берете новую задачу с Kanban-доски (ссылка ниже), создайте для нее отдельную feature-ветку. Название ветки должно отражать суть задачи, например `feature/add-telegram-auth` или `feature/improve-search-relevance`. После завершения работы сделайте коммит с понятным описанием изменений и отправьте код на GitHub:
+
 ```bash
-# Делаете задачу...
+git checkout -b feature/название-задачи
+# ... работаете над задачей ...
 git add .
 git commit -m "Описание изменений"
 git push origin feature/название-задачи
 ```
 
-### 4. Создать Pull Request
-- GitHub → Pull Request
-- `feature/название-задачи` → `develop`
-- Дождаться review → Merge
+Затем создайте Pull Request из вашей feature-ветки в `develop` через интерфейс GitHub. После review и одобрения другими участниками команды изменения будут смержены. Ветка `main` содержит только production-ready код и используется для финальных релизов.
 
-### 5. Взять следующую задачу
-```bash
-git checkout develop
-git pull
-git checkout -b feature/следующая-задача
-```
-
-## Workflow
-
-- `main` - production-ready код (не трогаем до финала)
-- `develop` - рабочая ветка (сюда мерджим всё)
-- `feature/*` - для каждой задачи с Kanban
-
-## Kanban задачи
-
-См. https://ru.yougile.com/board/fuzv88umzyoe
+**Kanban-доска проекта:** https://ru.yougile.com/board/fuzv88umzyoe
 
 ## Архитектура системы
 
 ### Схема взаимодействия модулей
 
-## Архитектура системы
-
-### Схема взаимодействия модулей
 ```
 ┌─────────────────┐         ┌──────────────────┐
 │   React Web     │         │  Telegram Bot    │
@@ -110,6 +106,7 @@ git checkout -b feature/следующая-задача
 ```
 
 ### LangChain Pipeline (внутри Backend)
+
 ```
 User Query → FastAPI Endpoint
                 ↓
@@ -150,6 +147,7 @@ User Query → FastAPI Endpoint
 8. Возврат ответа пользователю
 ```
 
+Найденные книги передаются в LLM вместе с исходным запросом пользователя, и модель генерирует финальный ответ с обзорами и рекомендациями. Вся история диалога сохраняется в PostgreSQL для авторизованных пользователей, после чего ответ возвращается клиенту (веб-интерфейсу или боту).
 
 ## Команда
 
@@ -165,4 +163,4 @@ User Query → FastAPI Endpoint
 
 ## Контакты
 
-https://t.me/dimitriymir
+По всем вопросам: https://t.me/dimitriymir
