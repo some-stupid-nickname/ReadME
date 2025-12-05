@@ -48,12 +48,11 @@ Frontend написан на React, а Telegram-бот использует би
 
 ## Как начать работу
 
-Проект использует Git Flow с рабочей веткой `develop` и feature-ветками для отдельных задач. Перед началом работы склонируйте репозиторий и переключитесь на ветку `develop`:
+Проект использует Git Flow с feature-ветками для отдельных задач. Перед началом работы склонируйте репозиторий :
 
 ```bash
 git clone <url>
 cd llm-course-project
-git checkout develop
 git pull
 ```
 
