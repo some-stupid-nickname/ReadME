@@ -258,3 +258,7 @@ out/
 # PostgreSQL local data (if running locally)
 postgres_data/
 pgdata/
+
+#API_KEYS
+
+backend/RAG_system/.env
