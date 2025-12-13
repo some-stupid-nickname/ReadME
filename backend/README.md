@@ -90,6 +90,36 @@ Alternative models you can try:
 - `multi-qa-MiniLM-L6-cos-v1` - Optimized for Q&A
 - `paraphrase-multilingual-MiniLM-L12-v2` - Multilingual support
 
+### RAG System Evaluation
+
+We use an LLM-as-Judge approach to evaluate recommendation quality:
+
+```bash
+# Evaluate with Mistral (free tier)
+python evaluate_rag.py --queries-file test_queries.json --provider mistral --top-k 5 --output results.json
+
+# Evaluate with OpenAI (paid, faster)
+python evaluate_rag.py --queries-file test_queries.json --provider openai --top-k 5 --output results.json
+```
+
+**Evaluation metrics:**
+- Average relevance score (0-5 scale)
+- Top-1 quality (first recommendation accuracy)
+- Top-3 average (first 3 recommendations)
+- Success rate (% of successful API calls)
+
+**Test queries:**
+- `test_queries.json` - 20 diverse queries across genres
+- `test_queries_small.json` - 5 queries for quick testing
+
+See `EVALUATION.md` for detailed documentation.
+
+**Results:**
+- Mistral: 3.13/5 average (100% success with rate limiting)
+- OpenAI: 2.81/5 average (100% success, no delays needed)
+- Best categories: Non-fiction (3.70/5), Specialized (3.38/5)
+- Weakest: Fiction (2.33/5) - generic descriptions hurt matching
+
 ### Troubleshooting
 
 **Large dataset loading issues:**
@@ -104,3 +134,8 @@ Alternative models you can try:
 **Qdrant connection errors:**
 - Verify Qdrant is running: `curl http://localhost:6333`
 - Check QDRANT_URL in .env file
+
+**Mistral rate limits:**
+- Free tier: ~30 requests before hitting limits
+- Script automatically adds 2-second delays
+- Failed judgments are excluded from metrics
