@@ -22,7 +22,7 @@ load_dotenv()
 class VectorDBSetup:
     def __init__(
         self,
-        csv_path: str = "../data/processed/BooksDatasetClean.csv",
+        excel_path: str = "../data/processed/book_data_prepared.xlsx",
         collection_name: str = "books",
         embedding_model: str = "all-MiniLM-L6-v2",
         qdrant_url: str = None,
@@ -40,7 +40,7 @@ class VectorDBSetup:
             qdrant_api_key: API key for Qdrant Cloud
             batch_size: Number of records to process at once
         """
-        self.csv_path = csv_path
+        self.excel_path = excel_path
         self.collection_name = collection_name
         self.batch_size = batch_size
 
@@ -59,8 +59,8 @@ class VectorDBSetup:
 
     def load_data(self) -> pd.DataFrame:
         """Load the books dataset from CSV"""
-        print(f"Loading data from {self.csv_path}")
-        df = pd.read_csv(self.csv_path)
+        print(f"Loading data from {self.excel_path}")
+        df = pd.read_excel(self.excel_path)
         print(f"Loaded {len(df)} books")
         print(f"Columns: {df.columns.tolist()}")
         return df
@@ -206,7 +206,7 @@ def main():
     """Main entry point"""
     # You can customize these parameters
     setup = VectorDBSetup(
-        csv_path="../data/processed/BooksDatasetClean.csv",
+        excel_path="../data/processed/book_data_prepared.xlsx",
         collection_name="books",
         embedding_model="all-MiniLM-L6-v2",  # Fast and efficient model
         batch_size=100
