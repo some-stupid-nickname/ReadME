@@ -29,13 +29,13 @@ services:
     container_name: rag-backend
     environment:
       MISTRAL_API_KEY: ${MISTRAL_API_KEY}
-      BOOKS_DB_PATH: ${BOOKS_DB_PATH:-/app/data/books.sqlite}
+      BOOKS_DB_PATH: ${BOOKS_DB_PATH:-/app/data/storage.sqlite}
       DATABASE_URL: postgresql://${POSTGRES_USER:-rag_user}:${POSTGRES_PASSWORD:-rag_password}@postgres:5432/${POSTGRES_DB:-rag_db}
       API_HOST: 0.0.0.0
       API_PORT: 8000
     volumes:
       - books_data:/app/data
-      - ../frontend/books.sqlite:/app/data/books.sqlite:ro
+      - ../data/storage.sqlite:/app/data/storage.sqlite:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     networks:
@@ -51,29 +51,6 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # React Frontend
-  frontend:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.frontend
-    container_name: rag-frontend
-    environment:
-      REACT_APP_API_URL: ${FRONTEND_API_URL:-http://localhost:8000}
-    ports:
-      - "${FRONTEND_PORT:-3000}:80"
-    networks:
-      - rag-network
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 3s
-      start_period: 5s
-      retries: 3
-    restart: unless-stopped
-
   # Telegram Bot
   telegram-bot:
     build:
@@ -83,13 +60,10 @@ services:
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       API_URL: http://backend:8000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-rag_user}:${POSTGRES_PASSWORD:-rag_password}@postgres:5432/${POSTGRES_DB:-rag_db}
     networks:
       - rag-network
     depends_on:
       backend:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "pgrep", "-f", "python.*bot"]

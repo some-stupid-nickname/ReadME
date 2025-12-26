@@ -7,7 +7,6 @@
 ```
 docker/
 ├── Dockerfile.backend          # FastAPI backend
-├── Dockerfile.frontend         # React frontend
 ├── Dockerfile.telegram-bot      # Telegram bot
 ├── docker-compose.yml          # Production конфигурация
 ├── docker-compose.dev.yml      # Development конфигурация
@@ -60,8 +59,8 @@ docker-compose up -d
 
 - Backend API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
-- Frontend: http://localhost:3000
 - PostgreSQL: localhost:5432
+- Telegram Bot: начните диалог с ботом в Telegram
 
 ## Скрипты управления
 
@@ -144,6 +143,8 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 - Монтирование исходного кода в контейнеры
 - Дополнительные порты для отладки
 
+**Примечание:** Frontend сервис удалён из конфигурации, так как используется только CLI интерфейс и Telegram бот.
+
 ## Переменные окружения
 
 Основные переменные в `.env`:
@@ -151,8 +152,7 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 - `MISTRAL_API_KEY` - **Обязательно** - ключ API Mistral
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` - настройки PostgreSQL
 - `TELEGRAM_BOT_TOKEN` - токен Telegram бота (если используется)
-- `BOOKS_DB_PATH` - путь к books.sqlite в контейнере
-- `FRONTEND_API_URL` - URL backend API для frontend
+- `BOOKS_DB_PATH` - путь к storage.sqlite в контейнере (по умолчанию: `/app/data/storage.sqlite`)
 
 Полный список см. в `.env.example`.
 
@@ -161,16 +161,15 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 Система использует следующие volumes:
 
 - `postgres_data` - данные PostgreSQL (персистентные)
-- `books_data` - данные для books.sqlite
+- `books_data` - данные для storage.sqlite
 
-**Важно:** Убедитесь, что файл `books.sqlite` существует в `frontend/` директории или укажите правильный путь в `BOOKS_DB_PATH`.
+**Важно:** Убедитесь, что файл `storage.sqlite` существует в `data/` директории или укажите правильный путь в `BOOKS_DB_PATH`.
 
 ## Сети
 
 Все сервисы находятся в одной сети `rag-network` и могут обращаться друг к другу по именам сервисов:
 
 - `backend` - FastAPI приложение
-- `frontend` - React приложение
 - `postgres` - PostgreSQL база данных
 - `telegram-bot` - Telegram бот
 
@@ -180,7 +179,6 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 - **Backend**: `GET /api/health`
 - **PostgreSQL**: `pg_isready`
-- **Frontend**: проверка доступности статики
 - **Telegram Bot**: проверка процесса
 
 ## Troubleshooting
@@ -222,13 +220,14 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
    POSTGRES_PORT=5433
    ```
 
-### Проблемы с books.sqlite
+### Проблемы с storage.sqlite
 
-Если backend не может найти books.sqlite:
+Если backend не может найти storage.sqlite:
 
-1. Убедитесь, что файл существует в `frontend/books.sqlite`
+1. Убедитесь, что файл существует в `data/storage.sqlite`
 2. Или укажите полный путь в `BOOKS_DB_PATH` в `.env`
 3. Проверьте volume mount в `docker-compose.yml`
+4. Проверьте качество данных: `python tests/check_book_data_quality.py --db-path data/storage.sqlite`
 
 ## Production deployment
 
@@ -244,5 +243,4 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 - [Docker Documentation](https://docs.docker.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
-- [Backend API Documentation](../backend/API_README.md)
-
+- [Backend API Documentation](API_SPECS.md)

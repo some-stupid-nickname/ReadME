@@ -8,12 +8,15 @@ from sentence_transformers import SentenceTransformer
 from mistralai import Mistral
 from dotenv import load_dotenv
 
-# Путь к базе данных - локальный файл рядом со скриптом
-db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'books.sqlite')
-
-# Подключение ключа 
+# Загрузка переменных окружения
 load_dotenv(".env")
+
+# Подключение ключа и пути к БД
 MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
+BOOKS_DB_PATH = os.environ.get("BOOKS_DB_PATH")
+
+# Путь к базе данных с fallback на локальный файл
+db_path = BOOKS_DB_PATH or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'books.sqlite')
 
 
 @dataclass

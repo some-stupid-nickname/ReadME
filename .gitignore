@@ -208,6 +208,13 @@ __marimo__/
 
 # ===== Project-Specific: ReadME Book Recommendation System =====
 
+# Environment variables (all .env files in any directory)
+**/.env
+**/.env.local
+**/.env.*.local
+.env
+.envrc
+
 # Data files (stored on Google Drive, should not be committed)
 data/raw/*.csv
 data/raw/*.xlsx
@@ -217,18 +224,42 @@ data/processed/*.csv
 data/processed/*.xlsx
 data/processed/*.txt
 data/processed/*.tsv
+
+# Database files
 *.sqlite
+*.sqlite3
 *.db
+*.db-journal
+storage.sqlite
+books.sqlite
+data/storage.sqlite
+data/*.sqlite
+frontend/books.sqlite
+backend/books.sqlite
 
 # Qdrant vector database storage
 qdrant_storage/
-storage.sqlite
 qdrant/
+*.qdrant
 
 # Machine Learning models cache
-models/
 transformers_cache/
 sentence_transformers_cache/
+.cache/
+*.pkl
+*.pickle
+
+# Temporary evaluation and test result files
+*_full_improved.json
+*_results.json
+*_evaluation.json
+backend/*_full_improved.json
+backend/*_results.json
+# RAGAS evaluation results
+*evaluation_results*.json
+backend/evaluation_results*.json
+evaluation_results.json
+evaluation_results2.json
 
 # Frontend - Node.js / React
 node_modules/
@@ -253,12 +284,46 @@ out/
 # Frontend - Environment and build artifacts
 .DS_Store
 *.local
-.cache/
+Thumbs.db
+desktop.ini
 
 # PostgreSQL local data (if running locally)
 postgres_data/
 pgdata/
+*.pgdata
 
-#API_KEYS
+# Docker volumes and data
+docker/volumes/
+*.volume
 
-backend/RAG_system/.env
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig

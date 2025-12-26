@@ -8,14 +8,10 @@ and overall recommendation quality.
 
 import os
 import json
-import time
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-import numpy as np
 from tqdm import tqdm
 
-from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 import re
@@ -25,7 +21,6 @@ from datasets import Dataset
 from langchain_core.documents import Document
 
 from langchain_mistralai import ChatMistralAI
-from langchain_mistralai.chat_models import acompletion_with_retry
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
@@ -54,6 +49,13 @@ except ImportError:
 
 # Load environment variables
 load_dotenv()
+
+def safe_format_number(num: int) -> str:
+    """Safely format number with thousands separator for Windows console compatibility"""
+    try:
+        return f"{num:,}"
+    except (ValueError, UnicodeEncodeError):
+        return str(num)
 
 def strip_json_fences(text: str) -> str:
     text = text.strip()
@@ -93,18 +95,31 @@ class RAGResult:
 class RAGASEvaluator:
     def __init__(
         self,
-        collection_name: str = "books",
+        search_engine: VectorSearchEngine,
         embedding_model: str = "all-MiniLM-L6-v2",
         judge_model: str = "mistral-small-latest",
         llm_provider: str = "mistral",
-        qdrant_path: str = "./qdrant_storage",
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        use_full_context: bool = True,
+        context_lang: str = "ru"
     ):
         """
         Initialize RAGAS evaluator
+        
+        Args:
+            search_engine: VectorSearchEngine instance for book search
+            embedding_model: Embedding model name for RAGAS metrics
+            judge_model: LLM model to use as judge
+            llm_provider: LLM provider ('mistral' or 'openai')
+            api_key: API key for LLM (or set via environment variable)
+            use_full_context: If True, use book.to_text() (full info), 
+                             if False, use only description
+            context_lang: Language for context ('ru' or 'en')
         """
-        self.collection_name = collection_name
+        self.search_engine = search_engine
         self.llm_provider = llm_provider.lower()
+        self.use_full_context = use_full_context
+        self.context_lang = context_lang
 
         # Initialize LLM client based on provider
         if self.llm_provider == "mistral":
@@ -113,52 +128,51 @@ class RAGASEvaluator:
             api_key = api_key or os.getenv("MISTRAL_API_KEY")
             if not api_key:
                 raise ValueError("Mistral API key required. Set MISTRAL_API_KEY environment variable.")
-            self.judge_model = SafeChatMistral(model="mistral-small-latest", api_key=api_key)
+            self.judge_model = SafeChatMistral(model=judge_model, api_key=api_key)
         else:
-            raise ValueError("Only 'mistral' is availble as llm_provider")
+            raise ValueError("Only 'mistral' is available as llm_provider")
 
-        # Initialize Qdrant and embedding model
+        # Initialize embedding model for RAGAS metrics
         print(f"Loading embedding model: {embedding_model}")
         self.embedding_model = HuggingFaceEmbeddings(model_name=embedding_model)
 
-        # Qdrant
-        print(f"Connecting to Qdrant at {qdrant_path}")
-        self.qdrant = QdrantClient(path=qdrant_path)
-
-        # Verify collection exists
-        try:
-            info = self.qdrant.get_collection(collection_name)
-            print(f"✓ Connected to collection '{collection_name}' with {info.points_count:,} books")
-        except Exception as e:
-            raise ValueError(f"Could not connect to collection '{collection_name}': {e}")
+        # Verify database connection
+        num_books = len(search_engine.book_db.books)
+        print(f"[OK] Connected to database with {safe_format_number(num_books)} books")
+        
+        # Log context settings
+        context_mode = "full book info" if self.use_full_context else "description only"
+        print(f"[CONFIG] Context mode: {context_mode} (language: {self.context_lang})")
 
     # ------------------------------------------------------------------
     # Retrieval
     # ------------------------------------------------------------------
     def search_books(self, query: str, top_k: int = 5) -> List[Document]:
-        query_vector = self.embedding_model.embed_query(query)
-
-        results = self.qdrant.query_points(
-            collection_name=self.collection_name,
-            query=query_vector,
-            limit=top_k,
-        ).points
-
+        """Search books using VectorSearchEngine"""
+        results = self.search_engine.search(query, top_k=top_k)
+        
         docs = []
-        for r in results:
-            content = r.payload.get("Description") or r.payload.get("description") or ""
-            title = r.payload.get("Title") or r.payload.get("title") or "Unknown"
-
+        for book, score in results:
+            # FIXED: Use full context like RAG system does
+            if self.use_full_context:
+                # Use the same information that RAG assistant sees
+                content = book.to_text(lang=self.context_lang)
+            else:
+                # Use only description (old behavior)
+                content = book.description or ""
+            
+            title = book.title or "Unknown"
+            
             docs.append(
                 Document(
                     page_content=content,
                     metadata={
                         "title": title,
-                        "score": r.score,
+                        "score": score,
                     },
                 )
             )
-
+        
         return docs
 
     # ------------------------------------------------------------------
@@ -216,9 +230,9 @@ class RAGASEvaluator:
         results_dict = results.to_pandas().to_dict(orient="list")
 
         if output_file:
-            with open(output_file, "w") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(results_dict, f, indent=2)
-            print(f"✓ Results saved to {output_file}")
+            print(f"[OK] Results saved to {output_file}")
 
         return results_dict
 
@@ -226,7 +240,7 @@ class RAGASEvaluator:
 def load_test_queries(file_path: str = "test_queries.json") -> List[str]:
     """Load test queries from JSON file"""
     if os.path.exists(file_path):
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding="utf-8") as f:
             data = json.load(f)
             return data.get("queries", [])
     return []
@@ -243,10 +257,14 @@ def main():
     parser.add_argument("--output", type=str, help="Output JSON file for results")
     parser.add_argument("--provider", default="mistral", choices=["mistral", "openai"],
                         help="LLM provider to use (default: mistral)")
-    parser.add_argument("--qdrant-path", default="./qdrant_storage",
-                        help="Path to qdrant sqlite file in a collection")
+    parser.add_argument("--db-path", default="books.sqlite",
+                        help="Path to SQLite database file")
     parser.add_argument("--model",
                         help="LLM model to use (default: mistral-small-latest for Mistral, gpt-4o-mini for OpenAI)")
+    parser.add_argument("--use-description-only", action="store_true",
+                        help="Use only book description for context (old behavior). Default: use full book info")
+    parser.add_argument("--context-lang", default="ru", choices=["ru", "en"],
+                        help="Language for context formatting (default: ru for Russian)")
 
     args = parser.parse_args()
 
@@ -254,20 +272,37 @@ def main():
     if not args.model:
         args.model = "mistral-small-latest" if args.provider == "mistral" else "gpt-4o-mini"
 
-    # Initialize evaluator
-    book_db = BookDatabase(args.collection_path + '/collection/books/storage.sqlite')
+    # Initialize database and search engine
+    print(f"Loading database from {args.db_path}")
+    book_db = BookDatabase(args.db_path)
     search_engine = VectorSearchEngine(book_db)
+    
     assistant = BookRAGAssistant(
         search_engine=search_engine,
         api_key=os.getenv("MISTRAL_API_KEY")
     )
-    evaluator = RAGASEvaluator(judge_model="mistral-small-latest", qdrant_path=args.qdrant_path)
+    
+    # Initialize evaluator with search engine
+    evaluator = RAGASEvaluator(
+        search_engine=search_engine,
+        judge_model=args.model,
+        llm_provider=args.provider,
+        use_full_context=not args.use_description_only,
+        context_lang=args.context_lang
+    )
 
     if args.query:
         # Evaluate single query
-        queries = [query]
-        response = assistant.ask(args.query)
-        responses.append(response)
+        queries = [args.query]
+        response, _ = assistant.ask(args.query)
+        responses = [response]
+        
+        evaluator.ragas_evaluate(
+            queries=queries,
+            responses=responses,
+            top_k=args.top_k,
+            output_file=args.output
+        )
     else:
         # Load and evaluate batch
         queries = load_test_queries(args.queries_file)
@@ -283,15 +318,15 @@ def main():
             ]
 
         responses = []
-        for query in tqdm(queries):
-            response = assistant.ask(query)
+        for query in tqdm(queries, desc="Generating responses"):
+            response, _ = assistant.ask(query)
             responses.append(response)
 
         evaluator.ragas_evaluate(
             queries=queries,
             responses=responses,
-            top_k=5,
-            output_file="output_file.json"
+            top_k=args.top_k,
+            output_file=args.output
         )
 
 

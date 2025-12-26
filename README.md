@@ -5,37 +5,37 @@
 ## Структура проекта
 
 ```
-backend/          # FastAPI + LangChain RAG pipeline (см. backend/README.md для настройки векторной БД)
-frontend/         # React веб-интерфейс
+backend/          # FastAPI + LangChain RAG pipeline (см. backend/README.md)
+frontend/         # CLI консольный интерфейс
 telegram-bot/     # Telegram бот
 data/            
   ├── raw/        # Исходные датасеты
   ├── processed/  # Очищенные данные
-  └── scripts/    # ETL скрипты для обработки данных
+  └── storage.sqlite  # SQLite база данных с векторами книг
 tests/            # Валидационный датасет и тесты
 docs/             # Документация
+docker/           # Docker конфигурация для контейнеризации
 ```
 
 ## Технологический стек
 
 Наш проект построен на современном стеке технологий для работы с большими языковыми моделями и векторным поиском. 
 Backend реализован на FastAPI с использованием фреймворка LangChain для построения RAG-пайплайна. 
-В качестве векторной базы данных используется Qdrant, которая хранит эмбеддинги всех книг из датасета. 
-Для генерации ответов задействован Mistral API, а также опционально HuggingFace Inference для резервных моделей.
+В качестве векторной базы данных используется SQLite с встроенным векторным поиском, который хранит эмбеддинги всех книг из датасета. 
+Для генерации ответов задействован Mistral API.
 
 Эмбеддинги текстов генерируются через библиотеку sentence-transformers (модель all-MiniLM-L6-v2). 
-Frontend написан на React, а Telegram-бот использует библиотеку python-telegram-bot для взаимодействия с пользователями в мессенджере.
+Система предоставляет два интерфейса: CLI консольный интерфейс и Telegram-бот (python-telegram-bot).
 
 ## Данные
 
 В основе системы лежит датасет из **174,467 книг**, собранный из четырех источников на Kaggle: Google Books Dataset, Books Dataset, GoodReads 100k books и CMU Books Summary Dataset. Все данные были объединены, очищены и приведены к единой структуре. Для каждой книги хранится название, автор, дата публикации, описание и количество страниц (где доступно).
 
 Пропущенные значения (в первую очередь описания книг) были восстановлены с помощью Google Books API через асинхронные запросы. Итоговый датасет сохранен в файле `book_data_prepared.xlsx` размером 79.1 МБ. 
-На основе этих данных построена векторная база Qdrant (514.2 МБ), содержащая эмбеддинги всех книг для быстрого семантического поиска.
+На основе этих данных построена векторная база SQLite (`data/storage.sqlite`), содержащая эмбеддинги всех книг для быстрого семантического поиска.
 
 **Ссылки на данные:**
 - [Итоговый датасет и сырые данные](https://drive.google.com/drive/folders/17La2w8ZsIB5Vu0nA3CGZgYhP7fqEM1hH) (Google Drive)
-- [Векторная база Qdrant](https://drive.google.com/drive/folders/1b20o7tnXicsZcupPpUf0xjYuo2mf76Fk) (Google Drive)
 - Подробности о структуре данных: `docs/Отчет_Чекпоинт 1.md`
 - Скрипт обработки: `data/scripts/data_preparation.ipynb`
 
@@ -43,21 +43,75 @@ Frontend написан на React, а Telegram-бот использует би
 
 Полная техническая документация доступна в папке `docs/`:
 - [API Reference](docs/API_SPECS.md) — спецификация всех эндпоинтов backend API
-- [Настройка векторной БД](backend/README.md) — инструкции по развертыванию Qdrant и загрузке эмбеддингов
+- [Настройка Backend](docs/BACKEND_SETUP.md) — инструкции по настройке и запуску backend
+- [Примеры использования Telegram бота](docs/TELEGRAM_BOT_EXAMPLES.md) — примеры команд и запросов
+- [Docker Deployment](docs/DOCKER_DEPLOYMENT.md) — инструкции по запуску через Docker
 - [Отчет по данным](docs/Отчет_Чекпоинт 1.md) — детали процесса сбора и подготовки датасета
 
 
-## Как начать работу
+## Быстрый старт
 
-Проект использует Git Flow с feature-ветками для отдельных задач. Перед началом работы склонируйте репозиторий :
+### Вариант 1: Запуск через Docker (рекомендуется)
 
 ```bash
+# 1. Клонируйте репозиторий
 git clone <url>
-cd llm-course-project
-git pull
+cd ReadME
+
+# 2. Настройте переменные окружения
+cd docker
+cp .env.example .env
+# Отредактируйте .env и укажите:
+# - MISTRAL_API_KEY (обязательно)
+# - TELEGRAM_BOT_TOKEN (если используете бота)
+# - BOOKS_DB_PATH (путь к data/storage.sqlite)
+
+# 3. Запустите все сервисы
+docker-compose up -d
+
+# 4. Проверьте работу
+# Backend API: http://localhost:8000/docs
+# Telegram бот: начните диалог с ботом в Telegram
 ```
 
-Когда берете новую задачу с Kanban-доски (ссылка ниже), создайте для нее отдельную feature-ветку. Название ветки должно отражать суть задачи, например `feature/add-telegram-auth` или `feature/improve-search-relevance`. После завершения работы сделайте коммит с понятным описанием изменений и отправьте код на GitHub:
+Подробнее: [Docker Setup](docker/README.md)
+
+### Вариант 2: Локальный запуск
+
+```bash
+# 1. Установите зависимости
+pip install -r requirements.txt
+
+# 2. Настройте переменные окружения
+# Создайте .env в корне проекта:
+# MISTRAL_API_KEY=your_key_here
+# BOOKS_DB_PATH=data/storage.sqlite
+
+# 3. Запустите backend
+cd backend
+python -m api.main
+
+# 4. В другом терминале запустите Telegram бот (опционально)
+cd telegram-bot
+python bot.py
+
+# 5. Или используйте CLI интерфейс
+cd frontend
+python console_interface.py
+```
+
+### Проверка базы данных
+
+Перед запуском убедитесь, что база данных существует:
+
+```bash
+# Проверка качества данных
+python tests/check_book_data_quality.py --db-path data/storage.sqlite
+```
+
+## Разработка
+
+Проект использует Git Flow с feature-ветками для отдельных задач:
 
 ```bash
 git checkout -b feature/название-задачи
@@ -67,8 +121,6 @@ git commit -m "Описание изменений"
 git push origin feature/название-задачи
 ```
 
-Затем создайте Pull Request из вашей feature-ветки в `develop` через интерфейс GitHub. После review и одобрения другими участниками команды изменения будут смержены. Ветка `main` содержит только production-ready код и используется для финальных релизов.
-
 **Kanban-доска проекта:** https://ru.yougile.com/board/fuzv88umzyoe
 
 ## Архитектура системы
@@ -77,8 +129,8 @@ git push origin feature/название-задачи
 
 ```
 ┌─────────────────┐         ┌──────────────────┐
-│   React Web     │         │  Telegram Bot    │
-│   (Frontend)    │         │   (python-tg)    │
+│   CLI Interface │         │  Telegram Bot    │
+│   (Console)     │         │   (python-tg)    │
 └────────┬────────┘         └────────┬─────────┘
          │                           │
          └───────────┬───────────────┘
@@ -99,7 +151,7 @@ git push origin feature/название-задачи
          ┌───────────┼───────────┐
          │           │           │
     ┌────▼────┐ ┌───▼────┐ ┌───▼─────┐
-    │  LLM    │ │Postgres│ │ Qdrant  │
+    │  LLM    │ │Postgres│ │ SQLite  │
     │ Mistral │ │ SQL    │ │ Vector  │
     │   API   │ │        │ │   DB    │
     └─────────┘ └────────┘ └─────────┘
@@ -117,7 +169,7 @@ User Query → FastAPI Endpoint
      │     ↓                │
      │  2. Embedder         │ → sentence-transformers
      │     ↓                │
-     │  3. Retriever        │ → Qdrant search
+     │  3. Retriever        │ → SQLite vector search
      │     ↓                │
      │  4. Response Gen     │ → LLM Mistral
      └──────────────────────┘
@@ -131,14 +183,14 @@ User Query → FastAPI Endpoint
 ```
 1. Пользователь вводит запрос
    ↓
-2. Frontend/Bot → Backend API (POST /api/search)
+2. CLI/Bot → Backend API (POST /api/search)
    ↓
 3. Query Transformation (LLM улучшает запрос)
    "хочу про космос" → "научная фантастика космические путешествия"
    ↓
 4. Генерация эмбеддинга улучшенного запроса
    ↓
-5. Векторный поиск в Qdrant (top_k книг)
+5. Векторный поиск в SQLite (top_k книг)
    ↓
 6. LLM генерирует финальный ответ с обзорами книг
    ↓
@@ -147,7 +199,7 @@ User Query → FastAPI Endpoint
 8. Возврат ответа пользователю
 ```
 
-Найденные книги передаются в LLM вместе с исходным запросом пользователя, и модель генерирует финальный ответ с обзорами и рекомендациями. Вся история диалога сохраняется в PostgreSQL для авторизованных пользователей, после чего ответ возвращается клиенту (веб-интерфейсу или боту).
+Найденные книги передаются в LLM вместе с исходным запросом пользователя, и модель генерирует финальный ответ с обзорами и рекомендациями. Вся история диалога сохраняется в памяти для текущей сессии, после чего ответ возвращается клиенту (CLI или Telegram боту).
 
 ## Команда
 
@@ -164,10 +216,11 @@ User Query → FastAPI Endpoint
 ## Тестирование и оценка качества
 
 ### Векторная база данных
-- **103,063 книги** загружены в Qdrant
+- **103,063 книги** загружены в SQLite
 - Модель эмбеддингов: `all-MiniLM-L6-v2` (384 измерения)
-- Хранилище: локальное (`backend/qdrant_storage/`)
+- Хранилище: `data/storage.sqlite`
 - Метрика поиска: косинусное сходство
+- Формат: SQLite с сериализованными векторами через pickle
 
 ### RAG Evaluation (LLM-as-Judge)
 Для автоматической оценки качества рекомендаций используем подход LLM-as-Judge:
