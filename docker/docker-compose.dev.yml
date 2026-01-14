@@ -1,0 +1,51 @@
+# Development overrides for docker-compose.yml
+# 
+# IMPORTANT: This file is an OVERRIDE file and MUST be used together with docker-compose.yml
+# 
+# Usage from command line:
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   OR
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# For VS Code Container Tools:
+#   Use docker-compose.yml directly, or configure VS Code to use both files
+
+services:
+  # Backend with hot-reload
+  backend:
+    volumes:
+      - ../backend:/app
+      - books_data:/app/data
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      API_RELOAD: "true"
+
+  # Frontend with development server (if using Vite/React dev server)
+  frontend:
+    build:
+      target: builder
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_HMR_PORT:-5173}:5173"
+    command: npm run dev || npm start || echo "No dev command found"
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+
+  # PostgreSQL with exposed logs
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_LOG_STATEMENT: all
+      POSTGRES_LOG_DURATION: "true"
+
+  # Telegram Bot with code mounting
+  telegram-bot:
+    volumes:
+      - ../telegram-bot:/app
+    command: python main.py || echo "Bot not implemented yet"
+

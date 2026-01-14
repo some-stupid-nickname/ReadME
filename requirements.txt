@@ -1,0 +1,46 @@
+# ============================================
+# RAG Book Recommendation System
+# Unified requirements.txt for all components
+# ============================================
+
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Vector database (SQLite with vector search)
+# Note: Using SQLite instead of Qdrant for this project
+# qdrant-client>=1.7.0  # Optional, not used in current setup
+
+# Embeddings
+sentence-transformers>=2.2.0
+
+# API framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# LangChain
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-mistralai>=1.1.0
+
+# Telegram Bot
+python-telegram-bot>=20.0
+httpx>=0.24.0
+
+# LLM APIs
+mistralai>=1.0.0
+openai>=1.0.0
+
+# RAGAS Evaluation (optional, for testing)
+ragas>=0.4.0
+datasets>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+
+# Database (SQLite is built-in, but SQLAlchemy for future use)
+sqlalchemy>=2.0.0
+
