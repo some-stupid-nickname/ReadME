@@ -22,7 +22,7 @@ load_dotenv()
 class VectorDBSetup:
     def __init__(
         self,
-        excel_path: str = "../data/processed/book_data_prepared.xlsx",
+        excel_path: str = "../processed/book_data_prepared.xlsx",
         collection_name: str = "books",
         embedding_model: str = "all-MiniLM-L6-v2",
         qdrant_url: str = None,
@@ -40,7 +40,12 @@ class VectorDBSetup:
             qdrant_api_key: API key for Qdrant Cloud
             batch_size: Number of records to process at once
         """
-        self.excel_path = excel_path
+        # Resolve path relative to script location if it's a relative path
+        if not os.path.isabs(excel_path):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            self.excel_path = os.path.normpath(os.path.join(script_dir, excel_path))
+        else:
+            self.excel_path = excel_path
         self.collection_name = collection_name
         self.batch_size = batch_size
 
@@ -205,8 +210,9 @@ class VectorDBSetup:
 def main():
     """Main entry point"""
     # You can customize these parameters
+    # Path will be resolved relative to script location
     setup = VectorDBSetup(
-        excel_path="../data/processed/book_data_prepared.xlsx",
+        excel_path="../processed/book_data_prepared.xlsx",
         collection_name="books",
         embedding_model="all-MiniLM-L6-v2",  # Fast and efficient model
         batch_size=100
