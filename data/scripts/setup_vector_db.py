@@ -148,8 +148,25 @@ class VectorDBSetup:
 
             # Create points for Qdrant
             for i, (_, row) in enumerate(batch_df.iterrows()):
-                # Convert row to dict and handle NaN values
-                payload = row.to_dict()
+                # Map Excel columns to expected database fields (matching database_service.py expectations)
+                title = row['title'] if pd.notna(row['title']) else 'Unknown'
+                author = row['author'] if pd.notna(row['author']) else 'Unknown'
+                description = row['description'] if pd.notna(row['description']) else ''
+                genre = row['genre'] if pd.notna(row['genre']) else 'Unknown'
+                pub_date = row['publication_date'] if pd.notna(row['publication_date']) else None
+                
+                payload = {
+                    'Title': title,
+                    'Authors': author,
+                    'Description': description,
+                    'Category': genre,
+                    'Publisher': None,
+                    'Price Starting With ($)': 0.0,
+                    'Publish Date (Month)': None,
+                    'Publish Date (Year)': pub_date
+                }
+
+                # Remove NaN values
                 payload = {k: (v if pd.notna(v) else None) for k, v in payload.items()}
 
                 point = PointStruct(

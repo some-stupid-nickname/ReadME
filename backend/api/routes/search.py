@@ -54,7 +54,7 @@ async def search_books(
         # Get RAG response and search results
         response_text, search_results = assistant.ask(
             user_query=request.query.strip(),
-            top_k=10
+            top_k=5
         )
 
         # Convert books to API format
@@ -158,7 +158,7 @@ async def enriched_search(
         # Get RAG response with enriched query
         response_text, search_results = assistant.ask(
             user_query=enriched_query,
-            top_k=10
+            top_k=5
         )
 
         # Convert books to API format
