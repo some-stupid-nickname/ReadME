@@ -7,7 +7,7 @@ This directory contains the backend components for the RAG-based book recommenda
 ### Prerequisites
 
 1. Python 3.10+
-2. Virtual environment (already configured in project root)
+2. Virtual environment
 3. SQLite database file: `data/storage.sqlite`
 
 ### Installation
@@ -24,7 +24,6 @@ pip install -r requirements.txt
 Система использует SQLite базу данных с векторным поиском:
 
 - **Файл:** `data/storage.sqlite`
-- **Структура:** Таблица `points` с сериализованными векторами через pickle
 - **Количество книг:** 103,063
 - **Размерность векторов:** 384 (модель all-MiniLM-L6-v2)
 
@@ -37,54 +36,43 @@ pip install -r requirements.txt
 python tests/check_book_data_quality.py --db-path data/storage.sqlite
 ```
 
-Это покажет:
-- Количество книг с описаниями
-- Статистику по категориям
-- Примеры книг без описаний
-
 ### Configuration
 
-Создайте файл `.env` в корне проекта:
+Создайте файл `.env` в корне проекта или в папке `backend/`:
 
 ```env
+# Обязательно
 MISTRAL_API_KEY=your_mistral_api_key_here
+
+# Опционально (пути по умолчанию)
 BOOKS_DB_PATH=data/storage.sqlite
+POSTGRES_USER=rag_user
+POSTGRES_PASSWORD=rag_password
+POSTGRES_DB=rag_db
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 ```
-
-### Embedding Model
-
-Система использует `all-MiniLM-L6-v2`:
-- Быстрая и эффективная
-- 384-мерные эмбеддинги
-- Хороший баланс между скоростью и качеством
 
 ### RAG System Evaluation
 
-Система использует RAGAS для оценки качества рекомендаций:
+Скрипты оценки находятся в папке `tests/`:
 
 ```bash
-# Оценка с Mistral
-cd backend
+# Оценка качества (LLM-as-Judge)
+cd tests
+python evaluate_rag.py --queries-file test_queries.json --provider mistral
+
+# Оценка с RAGAS
 python evaluate_rag_ragas.py \
-  --queries-file ../tests/test_queries_small.json \
+  --queries-file test_queries_small.json \
   --db-path ../data/storage.sqlite \
   --top-k 5 \
-  --output evaluation_results.json \
-  --context-lang ru
+  --output evaluation_results.json
 ```
 
-**Метрики RAGAS:**
-- **Faithfulness** - верность ответа контексту (0-1)
-- **Answer Relevancy** - релевантность ответа запросу (0-1)
-
-**Тестовые запросы:**
-- `tests/test_queries.json` - 20 разнообразных запросов
-- `tests/test_queries_small.json` - 5 запросов для быстрого тестирования
-
-**Параметры:**
-- `--context-lang` - язык контекста (`ru` или `en`)
-- `--use-description-only` - использовать только описания (старое поведение)
-- `--db-path` - путь к SQLite базе данных
+**Метрики:**
+- **Relevance** (evaluate_rag.py) - оценка релевантности через LLM.
+- **Faithfulness** (RAGAS) - верность ответа контексту.
+- **Answer Relevancy** (RAGAS) - релевантность ответа запросу.
 
 ### Запуск Backend API
 
@@ -97,24 +85,15 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 API будет доступен по адресу: http://localhost:8000
-Документация: http://localhost:8000/docs
+Документация Swagger: http://localhost:8000/docs
 
 ### Troubleshooting
 
 **Проблемы с базой данных:**
-- Убедитесь, что файл `data/storage.sqlite` существует
-- Проверьте путь в `BOOKS_DB_PATH` в `.env`
-- Запустите проверку качества данных: `python tests/check_book_data_quality.py`
-
-**Проблемы с памятью:**
-- SQLite загружает все векторы в память при старте
-- Для больших баз данных рассмотрите использование Qdrant или другой векторной БД
+- Убедитесь, что файл `data/storage.sqlite` существует.
+- Если вы запускаете из `backend/`, проверьте что `BOOKS_DB_PATH` в `.env` указывает правильный относительный путь (например, `../data/storage.sqlite`).
+- Запустите проверку: `python tests/check_book_data_quality.py --db-path data/storage.sqlite`.
 
 **Mistral rate limits:**
-- Free tier: ~30 запросов перед лимитом
-- Скрипты автоматически добавляют задержки
-- Неудачные запросы исключаются из метрик
-
-**Ошибки импорта:**
-- Убедитесь, что установлены все зависимости: `pip install -r requirements.txt`
-- Проверьте, что вы находитесь в правильной директории
+- На бесплатном тарифе Mistral есть лимиты (около 1 запроса в секунду).
+- Скрипты оценки в `tests/` имеют встроенные задержки (`time.sleep`).

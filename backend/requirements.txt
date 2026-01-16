@@ -21,7 +21,22 @@ langchain-community>=0.0.10
 # Utilities
 python-dotenv>=1.0.0
 tqdm>=4.66.0
+loguru>=0.7.0
 
-# LLM API (for evaluation)
+# LLM API
 mistralai>=1.0.0
 openai>=1.0.0
+
+# Authentication and Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# PostgreSQL
+asyncpg>=0.29.0
+
+# Background jobs
+apscheduler>=3.10.0
+
+# HTTP client for API calls
+httpx>=0.25.0

@@ -2,14 +2,129 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from api.routes import search, health
-from core.config import settings
+from contextlib import asynccontextmanager
+from loguru import logger
+import asyncio
 
-# Create FastAPI app
+from api.routes import search, health
+from api.routes import auth, onboarding, library, reviews, books, admin
+from core.config import settings
+from database.postgres_service import postgres_db
+from services.sqlite_helper import sqlite_book_service
+from services.background_jobs import PreferenceVectorRecalculator
+
+
+# Global scheduler variable
+scheduler = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for startup and shutdown events.
+    Handles PostgreSQL connection and background jobs.
+    """
+    global scheduler
+    
+    # Startup
+    logger.info("Starting Book Recommendation RAG API")
+    
+    try:
+        # Connect to PostgreSQL
+        await postgres_db.connect()
+        logger.info("PostgreSQL connected")
+        
+        # Initialize background jobs scheduler
+        try:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            
+            scheduler = AsyncIOScheduler()
+            
+            # Create preference vector recalculator
+            recalculator = PreferenceVectorRecalculator(
+                postgres_db=postgres_db,
+                sqlite_db=sqlite_book_service
+            )
+            
+            # Schedule to run every hour at :00
+            scheduler.add_job(
+                recalculator.recalculate_pending_users,
+                trigger='cron',
+                minute=0,
+                max_instances=1,  # Prevent concurrent runs
+                id='recalculate_preferences'
+            )
+            
+            scheduler.start()
+            logger.info("Background jobs scheduler started")
+        except Exception as e:
+            logger.warning(f"Failed to start scheduler (apscheduler not installed?): {e}")
+        
+        # Optional: Prefetch covers for onboarding books
+        # This is a background task that doesn't block startup
+        asyncio.create_task(prefetch_onboarding_covers())
+        
+        logger.info("API startup complete")
+    
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down API")
+    
+    if scheduler:
+        scheduler.shutdown(wait=True)
+        logger.info("Scheduler shut down")
+    
+    await postgres_db.disconnect()
+    logger.info("PostgreSQL disconnected")
+
+
+async def prefetch_onboarding_covers():
+    """
+    Background task to prefetch covers for onboarding books.
+    Runs asynchronously on startup without blocking.
+    """
+    try:
+        await asyncio.sleep(5)  # Wait for startup to complete
+        
+        from services.cover_fetch_service import CoverFetchService
+        import os
+        
+        logger.info("Starting onboarding covers prefetch")
+        
+        onboarding_books = await postgres_db.get_onboarding_books()
+        
+        cover_service = CoverFetchService(
+            postgres_db=postgres_db,
+            api_key=os.getenv('GOOGLE_BOOKS_API_KEY')
+        )
+        
+        books_to_fetch = [
+            {
+                'book_id': book['book_id'],
+                'title': book['title'],
+                'author': book['author']
+            }
+            for book in onboarding_books
+        ]
+        
+        await cover_service.prefetch_covers_batch(books_to_fetch)
+        logger.info("Onboarding covers prefetch completed")
+    
+    except Exception as e:
+        logger.error(f"Error prefetching covers: {e}")
+
+
+# Create FastAPI app with lifespan
 app = FastAPI(
     title="Book Recommendation RAG API",
-    description="RAG-based book recommendation system API",
-    version="1.0.0"
+    description="RAG-based book recommendation system API with personalization",
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # Configure CORS
@@ -21,9 +136,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include routers - EXISTING (DO NOT MODIFY THESE)
 app.include_router(search.router)
 app.include_router(health.router)
+
+# Include NEW routers
+app.include_router(auth.router, prefix="/api")
+app.include_router(onboarding.router, prefix="/api")
+app.include_router(library.router, prefix="/api")
+app.include_router(reviews.router, prefix="/api")
+app.include_router(books.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 
 
 @app.exception_handler(Exception)

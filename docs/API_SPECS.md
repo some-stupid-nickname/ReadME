@@ -7,112 +7,16 @@ Development: http://localhost:8000
 
 ## Аутентификация
 
-Защищенные endpoints требуют JWT token в header:
-```
-Authorization: Bearer <token>
-```
+**Примечание:** В текущей версии API аутентификация не реализована в коде `main.py`. Все запросы являются анонимными.
 
 ---
 
 # Endpoints
 
-## 1. Аутентификация
-
-### POST /api/auth/register
-Регистрация нового пользователя
-
-**Auth:** ❌ Не требуется
-
-**Request:**
-```json
-{
-  "username": "ivan_reader",
-  "password": "securepass123"
-}
-```
-
-**Response:** `201 Created`
-```json
-{
-  "id": 1,
-  "username": "ivan_reader",
-  "created_at": "2024-11-17T10:00:00Z"
-}
-```
-
-**Errors:**
-- `400 Bad Request` - Username уже занят
-- `422 Unprocessable Entity` - Невалидный формат (пароль < 8 символов, username < 3 символов)
-
----
-
-### POST /api/auth/login
-Вход в систему
-
-**Auth:** ❌ Не требуется
-
-**Request:**
-```json
-{
-  "username": "ivan_reader",
-  "password": "securepass123"
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-  "token_type": "bearer",
-  "user": {
-    "id": 1,
-    "username": "ivan_reader"
-  }
-}
-```
-
-**Errors:**
-- `401 Unauthorized` - Неверные credentials
-
----
-
-### POST /api/auth/logout
-Выход из системы (опционально, для фронтенда - удаление token на клиенте)
-
-**Auth:** ✅ Требуется
-
-**Response:** `200 OK`
-```json
-{
-  "message": "Successfully logged out"
-}
-```
-
----
-
-### GET /api/auth/me
-Получить данные текущего пользователя
-
-**Auth:** ✅ Требуется
-
-**Response:** `200 OK`
-```json
-{
-  "id": 1,
-  "username": "ivan_reader",
-  "created_at": "2024-11-17T10:00:00Z"
-}
-```
-
-**Errors:**
-- `401 Unauthorized` - Невалидный/истекший token
-
----
-
-## 2. Поиск книг
+## 1. Поиск книг
 
 ### POST /api/search
-Анонимный поиск книг (БЕЗ сохранения в историю)
+Базовый поиск книг (анонимный)
 
 **Auth:** ❌ Не требуется
 
@@ -132,286 +36,62 @@ Authorization: Bearer <token>
       "id": "book_123",
       "title": "Автостопом по галактике",
       "author": "Дуглас Адамс",
-      "genres": ["фантастика", "юмор"],
+      "genres": ["фантастика"],
       "description": "История обычного человека, который отправляется в невероятное путешествие по галактике...",
-      "source_link": "https://example.com/hitchhikers-guide"
-    },
-    {
-      "id": "book_456",
-      "title": "Марсианин",
-      "author": "Энди Вейр",
-      "genres": ["фантастика", "выживание"],
-      "description": "Астронавт остается один на Марсе и должен выжить...",
-      "source_link": "https://example.com/martian"
+      "source_link": null
     }
   ],
   "message_id": null
 }
 ```
 
-**Errors:**
-- `400 Bad Request` - Пустой запрос
-- `500 Internal Server Error` - Ошибка LLM/Qdrant
-
-**Примечание:** Анонимные запросы не сохраняются, `message_id` = `null`, нельзя поставить лайк/дизлайк
-
 ---
 
-## 3. Чаты (история)
+### POST /api/search/clarify
+Анализ запроса на полноту и генерация уточняющих вопросов
 
-### GET /api/chats
-Список всех чатов пользователя
+**Auth:** ❌ Не требуется
 
-**Auth:** ✅ Требуется
-
-**Query Parameters:**
-- `limit` (optional, default=20) - количество чатов
-- `offset` (optional, default=0) - смещение для пагинации
+**Request:**
+```json
+{
+  "query": "хочу книгу"
+}
+```
 
 **Response:** `200 OK`
 ```json
 {
-  "chats": [
-    {
-      "id": 123,
-      "title": "Книги про космос",
-      "created_at": "2024-11-17T10:00:00Z",
-      "updated_at": "2024-11-17T10:15:00Z",
-      "messages_count": 4
-    },
-    {
-      "id": 124,
-      "title": "Фэнтези для подростков",
-      "created_at": "2024-11-17T11:00:00Z",
-      "updated_at": "2024-11-17T11:05:00Z",
-      "messages_count": 2
-    }
+  "is_vague": true,
+  "clarifying_questions": [
+    "Какой жанр вы предпочитаете?",
+    "О чем должна быть книга?"
   ],
-  "total": 2
+  "original_query": "хочу книгу"
 }
 ```
 
 ---
 
-### POST /api/chats
-Создать новый чат
+### POST /api/search/enriched
+Поиск с использованием уточненного контекста
 
-**Auth:** ✅ Требуется
+**Auth:** ❌ Не требуется
 
 **Request:**
 ```json
 {
-  "title": "Новый чат"  // опционально, автогенерируется из первого сообщения
-}
-```
-
-**Response:** `201 Created`
-```json
-{
-  "id": 125,
-  "title": "Новый чат",
-  "created_at": "2024-11-17T12:00:00Z",
-  "updated_at": "2024-11-17T12:00:00Z"
-}
-```
-
----
-
-### GET /api/chats/{chat_id}
-Получить сообщения конкретного чата
-
-**Auth:** ✅ Требуется
-
-**Response:** `200 OK`
-```json
-{
-  "id": 123,
-  "title": "Книги про космос",
-  "created_at": "2024-11-17T10:00:00Z",
-  "updated_at": "2024-11-17T10:15:00Z",
-  "messages": [
-    {
-      "id": 1,
-      "role": "user",
-      "content": "хочу что-то про космос",
-      "created_at": "2024-11-17T10:00:00Z",
-      "feedback": null
-    },
-    {
-      "id": 2,
-      "role": "assistant",
-      "content": "Вот несколько отличных книг про космос:\n\n📚 **\"Автостопом по галактике\"**...",
-      "books": [
-        {
-          "id": "book_123",
-          "title": "Автостопом по галактике",
-          "author": "Дуглас Адамс",
-          "genres": ["фантастика", "юмор"],
-          "source_link": "https://example.com/hitchhikers-guide"
-        }
-      ],
-      "created_at": "2024-11-17T10:00:05Z",
-      "feedback": "like"
-    },
-    {
-      "id": 3,
-      "role": "user",
-      "content": "а что-то похожее но серьезнее?",
-      "created_at": "2024-11-17T10:10:00Z",
-      "feedback": null
-    },
-    {
-      "id": 4,
-      "role": "assistant",
-      "content": "📚 **\"Дюна\"** - Фрэнк Герберт\nЭпическая научная фантастика...",
-      "books": [...],
-      "created_at": "2024-11-17T10:10:05Z",
-      "feedback": null
-    }
-  ]
-}
-```
-
-**Errors:**
-- `404 Not Found` - Чат не найден или не принадлежит пользователю
-
----
-
-### DELETE /api/chats/{chat_id}
-Удалить чат
-
-**Auth:** ✅ Требуется
-
-**Response:** `204 No Content`
-
-**Errors:**
-- `404 Not Found` - Чат не найден или не принадлежит пользователю
-
----
-
-### PATCH /api/chats/{chat_id}
-Изменить название чата
-
-**Auth:** ✅ Требуется
-
-**Request:**
-```json
-{
-  "title": "Космическая фантастика"
+  "original_query": "хочу книгу",
+  "user_context": "фантастика про путешествия во времени"
 }
 ```
 
 **Response:** `200 OK`
-```json
-{
-  "id": 123,
-  "title": "Космическая фантастика",
-  "updated_at": "2024-11-17T12:30:00Z"
-}
-```
+(Формат совпадает с `/api/search`)
 
 ---
 
-## 4. Сообщения в чате
-
-### POST /api/chats/{chat_id}/messages
-Отправить сообщение в чат (поиск книг с сохранением в историю)
-
-**Auth:** ✅ Требуется
-
-**Request:**
-```json
-{
-  "query": "хочу что-то про космос"
-}
-```
-
-**Response:** `201 Created`
-```json
-{
-  "user_message": {
-    "id": 5,
-    "role": "user",
-    "content": "хочу что-то про космос",
-    "created_at": "2024-11-17T13:00:00Z"
-  },
-  "assistant_message": {
-    "id": 6,
-    "role": "assistant",
-    "content": "Вот несколько отличных книг про космос:\n\n📚 **\"Автостопом по галактике\"**...",
-    "books": [
-      {
-        "id": "book_123",
-        "title": "Автостопом по галактике",
-        "author": "Дуглас Адамс",
-        "genres": ["фантастика", "юмор"],
-        "description": "...",
-        "source_link": "https://example.com/hitchhikers-guide"
-      }
-    ],
-    "created_at": "2024-11-17T13:00:05Z",
-    "feedback": null
-  }
-}
-```
-
-**Errors:**
-- `404 Not Found` - Чат не найден или не принадлежит пользователю
-- `400 Bad Request` - Пустой запрос
-
-**Примечание:** 
-- Автоматически обновляет `title` чата, если это первое сообщение
-- Сообщения сохраняются в БД
-
----
-
-## 5. Обратная связь (лайки/дизлайки)
-
-### POST /api/messages/{message_id}/feedback
-Поставить лайк или дизлайк ответу ассистента
-
-**Auth:** ✅ Требуется
-
-**Request:**
-```json
-{
-  "feedback": "like"  // или "dislike"
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "message_id": 6,
-  "feedback": "like",
-  "updated_at": "2024-11-17T13:05:00Z"
-}
-```
-
-**Errors:**
-- `404 Not Found` - Сообщение не найдено или не принадлежит чату пользователя
-- `400 Bad Request` - Невалидное значение feedback (не "like" или "dislike")
-- `403 Forbidden` - Нельзя оценить сообщение пользователя (только assistant messages)
-
----
-
-### DELETE /api/messages/{message_id}/feedback
-Убрать лайк/дизлайк
-
-**Auth:** ✅ Требуется
-
-**Response:** `200 OK`
-```json
-{
-  "message_id": 6,
-  "feedback": null,
-  "updated_at": "2024-11-17T13:10:00Z"
-}
-```
-
----
-
-## 6. Служебные endpoints
+## 2. Служебные endpoints
 
 ### GET /api/health
 Проверка работоспособности API
@@ -424,30 +104,25 @@ Authorization: Bearer <token>
   "status": "ok",
   "services": {
     "database": "ok",
-    "qdrant": "ok",
-    "llm": "ok"
+    "llm": "ok",
+    "qdrant": "ok"
   },
   "version": "1.0.0"
 }
 ```
+*Примечание: `qdrant: ok` является плейсхолдером, так как система использует SQLite.*
 
 ---
 
-### GET /api/stats
-Статистика использования (опционально, для аналитики)
+## 3. Планируемые функции (Backlog)
 
-**Auth:** ✅ Требуется
+Следующие эндпоинты описаны в спецификации, но временно отсутствуют в текущей реализации:
 
-**Response:** `200 OK`
-```json
-{
-  "total_chats": 5,
-  "total_messages": 24,
-  "liked_messages": 8,
-  "disliked_messages": 2,
-  "most_searched_genres": ["фантастика", "детектив", "классика"]
-}
-```
+- `POST /api/auth/register` - Регистрация
+- `POST /api/auth/login` - Вход
+- `GET /api/chats` - История чатов
+- `POST /api/chats/{chat_id}/messages` - Сообщения в чате
+- `POST /api/messages/{message_id}/feedback` - Лайки/дизлайки
 
 ---
 
@@ -456,13 +131,8 @@ Authorization: Bearer <token>
 | Код | Описание |
 |-----|----------|
 | 200 | OK - успешный запрос |
-| 201 | Created - ресурс создан |
-| 204 | No Content - успешно удалено |
 | 400 | Bad Request - невалидные данные |
-| 401 | Unauthorized - требуется аутентификация |
-| 403 | Forbidden - нет доступа к ресурсу |
 | 404 | Not Found - ресурс не найден |
-| 422 | Unprocessable Entity - ошибка валидации |
 | 500 | Internal Server Error - ошибка сервера |
 
 ## Формат ошибок
@@ -471,13 +141,3 @@ Authorization: Bearer <token>
   "detail": "Описание ошибки"
 }
 ```
-
-## Rate Limiting (опционально)
-
-- Анонимные запросы: 10 запросов/минуту
-- Авторизованные: 60 запросов/минуту
-
-## CORS
-
-Разрешенные origins:
-- Development: `http://localhost:3000`, `http://localhost:5173`

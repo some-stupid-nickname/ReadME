@@ -1,5 +1,6 @@
 """Pydantic schemas for API requests and responses"""
 from typing import List, Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -79,3 +80,140 @@ class Message(BaseModel):
     content: str
     created_at: str
     feedback: Optional[str] = None
+
+
+# ============================================================
+# NEW MODELS - Authentication and User Management
+# ============================================================
+
+class UserRegister(BaseModel):
+    """User registration request"""
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+
+
+class UserLogin(BaseModel):
+    """User login request"""
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    """JWT token response"""
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+
+
+class UserProfile(BaseModel):
+    """User profile information"""
+    user_id: int
+    username: str
+    onboarding_completed: bool
+    library_count: int = 0
+
+
+# ============================================================
+# NEW MODELS - Onboarding
+# ============================================================
+
+class OnboardingBook(BaseModel):
+    """Onboarding book selection"""
+    book_id: str
+    title: str
+    author: str
+    category: str
+    cover_url: Optional[str] = None
+
+
+class OnboardingComplete(BaseModel):
+    """Onboarding completion request"""
+    selected_book_ids: List[str] = Field(..., min_items=3, max_items=10)
+
+
+# ============================================================
+# NEW MODELS - Extended Book Information
+# ============================================================
+
+class BookDetailResponse(BaseModel):
+    """Extended book info with additional fields - for new endpoints only"""
+    book_id: str
+    title: str
+    author: str  # First author for display
+    authors: str  # Full comma-separated list from DB
+    category: str  # Raw category from DB
+    genres: List[str]  # Parsed array from category
+    description: str
+    publish_year: Optional[int] = None
+    publish_month: Optional[int] = None
+    cover_url: Optional[str] = None
+    source_link: Optional[str] = None  # Compatibility field, always None
+    
+    # Library context (populated if user has this book)
+    in_library: bool = False
+    added_at: Optional[datetime] = None
+    rating: Optional[int] = None
+    review: Optional[str] = None
+
+
+# ============================================================
+# NEW MODELS - Library Management
+# ============================================================
+
+class LibraryAddRequest(BaseModel):
+    """Request to add book to library"""
+    source_query: Optional[str] = None
+
+
+class LibraryResponse(BaseModel):
+    """Response for library operations"""
+    books: List[BookDetailResponse]
+
+
+# ============================================================
+# NEW MODELS - Reviews
+# ============================================================
+
+class ReviewRequest(BaseModel):
+    """Review creation/update request"""
+    book_id: str
+    rating: int = Field(..., ge=1, le=10)
+    review_text: Optional[str] = Field(None, max_length=2000)
+
+
+class ReviewResponse(BaseModel):
+    """Review information"""
+    book_id: str
+    rating: int
+    review_text: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+# ============================================================
+# NEW MODELS - Personalized Search
+# ============================================================
+
+class PersonalizedSearchResponse(SearchResponse):
+    """Extends SearchResponse with personalization metadata"""
+    personalization_applied: bool = False
+    similarity_score: Optional[float] = None
+    context_books: Optional[List[str]] = None  # Titles of books used for context
+
+
+# ============================================================
+# NEW MODELS - Admin Metrics
+# ============================================================
+
+class MetricsResponse(BaseModel):
+    """Admin metrics response"""
+    total_users: int
+    active_users_7d: int
+    total_queries_all_time: int
+    total_queries_today: int
+    total_queries_week: int
+    primary_acceptance_rate: float  # (books liked / books returned) * 100
+    final_acceptance_rate: float  # (books rated >=7 / books in libraries) * 100
+    avg_library_size: float
+    avg_rating: float
+    median_rating: float

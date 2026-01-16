@@ -31,13 +31,14 @@ Backend реализован на FastAPI с использованием фре
 
 В основе системы лежит датасет из **174,467 книг**, собранный из четырех источников на Kaggle: Google Books Dataset, Books Dataset, GoodReads 100k books и CMU Books Summary Dataset. Все данные были объединены, очищены и приведены к единой структуре. Для каждой книги хранится название, автор, дата публикации, описание и количество страниц (где доступно).
 
-Пропущенные значения (в первую очередь описания книг) были восстановлены с помощью Google Books API через асинхронные запросы. Итоговый датасет сохранен в файле `book_data_prepared.xlsx` размером 79.1 МБ.
-На основе этих данных построена векторная база SQLite (`data/storage.sqlite`), содержащая эмбеддинги всех книг для быстрого семантического поиска.
+Пропущенные значения были восстановлены с помощью Google Books API. Итоговый датасет сохранен в файле `data/processed/book_data_prepared.xlsx`.
+На основе этих данных построена векторная база SQLite (`data/storage.sqlite`), содержащая эмбеддинги книг для быстрого семантического поиска.
 
 **Ссылки на данные:**
 - [Итоговый датасет и сырые данные](https://drive.google.com/drive/folders/17La2w8ZsIB5Vu0nA3CGZgYhP7fqEM1hH) (Google Drive)
 - Подробности о структуре данных: `docs/Отчет_Чекпоинт 1.md`
 - Скрипт обработки: `data/scripts/data_preparation.ipynb`
+- Скрипт создания БД: `data/scripts/build_sqlite_db.py`
 
 ## Документация
 
@@ -46,8 +47,9 @@ Backend реализован на FastAPI с использованием фре
 - [Настройка Backend](docs/BACKEND_SETUP.md) — инструкции по настройке и запуску backend
 - [Примеры использования Telegram бота](docs/TELEGRAM_BOT_EXAMPLES.md) — примеры команд и запросов
 - [Docker Deployment](docs/DOCKER_DEPLOYMENT.md) — инструкции по запуску через Docker
-- [LLM Query Enrichment](docs/LLM_ENRICHMENT_FEATURE.md) — новая фича: уточняющие вопросы для неточных запросов
+- [LLM Query Enrichment](docs/LLM_ENRICHMENT_FEATURE.md) — фича: уточняющие вопросы для неточных запросов
 - [Отчет по данным](docs/Отчет_Чекпоинт 1.md) — детали процесса сбора и подготовки датасета
+- [Настройка векторной БД](docs/VECTOR_DB_SETUP.md) — детали реализации SQLite Vector Search
 
 
 ## Быстрый старт
@@ -142,7 +144,7 @@ git push origin feature/название-задачи
               │  ┌───────────────────────┐  │
               │  │   LangChain Pipeline  │  │
               │  │                       │  │
-              │  │ • Query Rewriter      │  │
+              │  │ • Query Enrichment    │  │
               │  │ • Embedder            │  │
               │  │ • Retriever           │  │
               │  │ • Response Generator  │  │
@@ -166,16 +168,15 @@ User Query → FastAPI Endpoint
      ┌──────────────────────┐
      │   LangChain Chain    │
      │                      │
-     │  1. Query Rewriter   │ → LLM Mistral
+     │  1. Query Enrichment │ → LLM Mistral (Optional)
      │     ↓                │
      │  2. Embedder         │ → sentence-transformers
      │     ↓                │
      │  3. Retriever        │ → SQLite vector search
      │     ↓                │
      │  4. Response Gen     │ → LLM Mistral
+     │     ↓                │
      └──────────────────────┘
-                ↓
-         Save to PostgreSQL
                 ↓
          Return Response
 ```
@@ -186,21 +187,19 @@ User Query → FastAPI Endpoint
    ↓
 2. CLI/Bot → Backend API (POST /api/search)
    ↓
-3. Query Transformation (LLM улучшает запрос)
-   "хочу про космос" → "научная фантастика космические путешествия"
+3. (Optional) Query Enrichment (API анализирует запрос)
+   "хочу про космос" → Clarification Questions
    ↓
-4. Генерация эмбеддинга улучшенного запроса
+4. Генерация эмбеддинга запроса
    ↓
 5. Векторный поиск в SQLite (top_k книг)
    ↓
 6. LLM генерирует финальный ответ с обзорами книг
    ↓
-7. Сохранение в PostgreSQL (история чата)
-   ↓
-8. Возврат ответа пользователю
+7. Возврат ответа пользователю
 ```
 
-Найденные книги передаются в LLM вместе с исходным запросом пользователя, и модель генерирует финальный ответ с обзорами и рекомендациями. Вся история диалога сохраняется в памяти для текущей сессии, после чего ответ возвращается клиенту (CLI или Telegram боту).
+Найденные книги передаются в LLM вместе с исходным запросом пользователя, и модель генерирует финальный ответ с обзорами и рекомендациями. Ответ возвращается клиенту (CLI или Telegram боту).
 
 ## Команда
 
@@ -235,15 +234,13 @@ User Query → FastAPI Endpoint
 
 **Запуск тестов:**
 ```bash
-cd backend
+cd tests
 # Mistral (с защитой от rate limits)
 python evaluate_rag.py --queries-file test_queries.json --provider mistral --top-k 5 --output results.json
 
 # OpenAI (быстрее, платный)
 python evaluate_rag.py --queries-file test_queries.json --provider openai --top-k 5 --output results.json
 ```
-
-Подробнее: [`backend/EVALUATION.md`](backend/EVALUATION.md)
 
 ## Контакты
 

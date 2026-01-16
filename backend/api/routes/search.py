@@ -3,11 +3,13 @@ from fastapi import APIRouter, HTTPException, Depends
 from models.schemas import (
     SearchRequest, SearchResponse, BookInfo,
     ClarificationRequest, ClarificationResponse,
-    EnrichedSearchRequest
+    EnrichedSearchRequest, PersonalizedSearchResponse
 )
 from services.rag_service import BookRAGAssistant
 from services.query_enrichment_service import QueryEnrichmentService
-from api.dependencies import get_rag_assistant, get_query_enrichment_service
+from services.personalized_search_service import PersonalizedSearchService
+from services.sqlite_helper import sqlite_book_service
+from api.dependencies import get_rag_assistant, get_query_enrichment_service, get_postgres_db, get_current_user
 from models.book import Book
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -173,6 +175,66 @@ async def enriched_search(
             message_id=None
         )
 
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+# ============================================================
+# NEW ENDPOINT - Personalized Search
+# ============================================================
+
+@router.post("/personalized", response_model=PersonalizedSearchResponse, status_code=200)
+async def personalized_search(
+    request: SearchRequest,
+    current_user: dict = Depends(get_current_user),
+    assistant: BookRAGAssistant = Depends(get_rag_assistant),
+    db = Depends(get_postgres_db)
+) -> PersonalizedSearchResponse:
+    """
+    Personalized book search using user's reading history.
+    
+    This endpoint wraps the existing RAG assistant with personalization layer:
+    1. Analyzes user's library and ratings
+    2. Computes similarity between query and user preferences
+    3. If similar enough, enhances query with context from user's favorite books
+    4. Calls standard RAG assistant (unchanged)
+    5. Filters out books already in user's library
+    6. Logs recommendation for metrics
+    
+    Requires authentication: Authorization: Bearer <token>
+    
+    Args:
+        query: Search query
+    
+    Returns:
+        Search results with personalization metadata
+    """
+    # Validate query
+    if not request.query or not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Query cannot be empty"
+        )
+    
+    try:
+        # Create personalized search service (wraps existing RAG)
+        personalized_service = PersonalizedSearchService(
+            rag_assistant=assistant,
+            postgres_db=db,
+            sqlite_db=sqlite_book_service
+        )
+        
+        # Perform personalized search
+        result = await personalized_service.search(
+            user_id=current_user['id'],
+            query=request.query.strip()
+        )
+        
+        return result
+    
     except Exception as e:
         raise HTTPException(
             status_code=500,
