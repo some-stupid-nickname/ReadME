@@ -5,14 +5,12 @@ This script evaluates the quality of book recommendations using LLM models
 (Mistral or OpenAI) as automated judges. It measures relevance, diversity,
 and overall recommendation quality.
 """
-
 import os
 import json
+import asyncio
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from tqdm import tqdm
-
-from dotenv import load_dotenv
 
 import re
 from langchain.messages import AIMessage
@@ -24,15 +22,16 @@ from langchain_mistralai import ChatMistralAI
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-from ragas import evaluate
+from ragas import evaluate, SingleTurnSample
 from ragas.metrics import (
     faithfulness,
     answer_relevancy
 )
+from ragas.metrics import LLMContextPrecisionWithoutReference
 
-from services.rag_service import BookRAGAssistant
-from services.search_service import VectorSearchEngine
-from services.database_service import BookDatabase
+from backend.services.rag_service import BookRAGAssistant
+from backend.services.search_service import VectorSearchEngine
+from backend.services.database_service import BookDatabase
 
 # Import LLM clients conditionally
 try:
@@ -48,6 +47,7 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 # Load environment variables
+from dotenv import load_dotenv
 load_dotenv()
 
 def safe_format_number(num: int) -> str:
@@ -143,6 +143,10 @@ class RAGASEvaluator:
         # Log context settings
         context_mode = "full book info" if self.use_full_context else "description only"
         print(f"[CONFIG] Context mode: {context_mode} (language: {self.context_lang})")
+        
+        # Initialize context precision scorer
+        self.context_precision_scorer = LLMContextPrecisionWithoutReference(llm=self.judge_model)
+        self.dataset = None
 
     # ------------------------------------------------------------------
     # Retrieval
@@ -199,18 +203,32 @@ class RAGASEvaluator:
             )
 
         return Dataset.from_list(records)
+    
+    async def compute_context_precision(self) -> List[float]:
+        assert self.dataset is not None, "Run build_dataset or ragas_evaluate first"
+        tasks = [
+            self.context_precision_scorer.single_turn_ascore(
+                SingleTurnSample(
+                    user_input=row["question"],
+                    response=row["response"],
+                    retrieved_contexts=row["retrieved_contexts"],
+                )
+            )
+            for row in self.dataset
+        ]
+        return await asyncio.gather(*tasks)
 
     # ------------------------------------------------------------------
     # Evaluate with RAGAS
     # ------------------------------------------------------------------
-    def ragas_evaluate(
+    async def ragas_evaluate_async(
         self,
         queries: List[str],
         responses: List[str],
         top_k: int = 5,
         output_file: Optional[str] = None,
     ) -> Dict:
-        dataset = self.build_dataset(queries, responses=responses, top_k=top_k)
+        self.dataset = self.build_dataset(queries, responses=responses, top_k=top_k)
 
         print("\nRunning RAGAS evaluation...\n")
 
@@ -219,15 +237,18 @@ class RAGASEvaluator:
         answer_relevancy.llm = self.judge_model
 
         results = evaluate(
-            dataset,
+            self.dataset,
             metrics=[
                 faithfulness,
                 answer_relevancy
             ],
-            allow_nest_asyncio=False
+            allow_nest_asyncio=True
         )
 
         results_dict = results.to_pandas().to_dict(orient="list")
+
+        context_precision_scores = await self.compute_context_precision()
+        results_dict["context_precision"] = context_precision_scores
 
         if output_file:
             with open(output_file, "w", encoding="utf-8") as f:
@@ -235,6 +256,10 @@ class RAGASEvaluator:
             print(f"[OK] Results saved to {output_file}")
 
         return results_dict
+    
+    def ragas_evaluate(self, *args, **kwargs) -> Dict:
+        """Sync wrapper for ragas_evaluate_async"""
+        return asyncio.run(self.ragas_evaluate_async(*args, **kwargs))
 
 
 def load_test_queries(file_path: str = "test_queries.json") -> List[str]:
@@ -297,11 +322,11 @@ def main():
         response, _ = assistant.ask(args.query)
         responses = [response]
         
-        evaluator.ragas_evaluate(
+        results = evaluator.ragas_evaluate(
             queries=queries,
             responses=responses,
-            top_k=args.top_k,
-            output_file=args.output
+            top_k=5,
+            output_file="results.json",
         )
     else:
         # Load and evaluate batch
@@ -312,9 +337,9 @@ def main():
             queries = [
                 "fantasy book with dragons and magic",
                 "mystery thriller detective novel",
-                "business book about startups",
-                "science fiction space adventure",
-                "historical fiction world war"
+                # "business book about startups",
+                # "science fiction space adventure",
+                # "historical fiction world war"
             ]
 
         responses = []
@@ -322,12 +347,16 @@ def main():
             response, _ = assistant.ask(query)
             responses.append(response)
 
-        evaluator.ragas_evaluate(
+        results = evaluator.ragas_evaluate(
             queries=queries,
             responses=responses,
-            top_k=args.top_k,
-            output_file=args.output
+            top_k=5,
+            output_file="results.json",
         )
+
+        # results2 = asyncio.run(evaluator.compute_context_precision())
+
+        
 
 
 if __name__ == "__main__":

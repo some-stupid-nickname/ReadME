@@ -14,7 +14,7 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not query:
         await update.message.reply_text(
-            "Пожалуйста, введите поисковый запрос."
+            "Please enter a search query."
         )
         return
 
@@ -78,8 +78,8 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         error_message = (
-            "❌ Произошла ошибка при поиске книг.\n\n"
-            "Попробуйте позже или измените ваш запрос."
+            "❌ An error occurred while searching for books.\n\n"
+            "Please try again later or modify your query."
         )
         await update.message.reply_text(error_message)
         # Log error in production
@@ -156,7 +156,7 @@ async def send_book_message(
     """Send book message with navigation buttons"""
     current_book = user_state.get_current_book()
     if not current_book:
-        await update.message.reply_text("Книга не найдена.")
+        await update.message.reply_text("Book not found.")
         return
 
     # Format book message
@@ -178,18 +178,18 @@ async def send_book_message(
     # Previous button
     if user_state.can_go_prev():
         buttons_row.append(
-            InlineKeyboardButton("← Назад", callback_data="prev_book")
+            InlineKeyboardButton("← Back", callback_data="prev_book")
         )
 
     # Next button
     if user_state.can_go_next():
         buttons_row.append(
-            InlineKeyboardButton("Далее →", callback_data="next_book")
+            InlineKeyboardButton("Next →", callback_data="next_book")
         )
     else:
         # Last book - show "New Search" button
         buttons_row.append(
-            InlineKeyboardButton("🔄 Новый поиск", callback_data="new_search")
+            InlineKeyboardButton("🔄 New Search", callback_data="new_search")
         )
 
     if buttons_row:
