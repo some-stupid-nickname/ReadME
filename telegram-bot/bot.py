@@ -118,7 +118,7 @@ def main():
         if isinstance(update, Update) and update.effective_message:
             try:
                 await update.effective_message.reply_text(
-                    "❌ Произошла ошибка. Пожалуйста, попробуйте позже."
+                    "❌ An error occurred. Please try again later."
                 )
             except Exception:
                 pass

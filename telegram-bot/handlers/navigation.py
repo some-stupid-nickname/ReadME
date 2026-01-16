@@ -18,7 +18,7 @@ async def handle_navigation_callback(
     
     if not state_manager.has_state(user_id):
         await query.edit_message_text(
-            "❌ Сессия истекла. Пожалуйста, начните новый поиск."
+            "❌ Session expired. Please start a new search."
         )
         return
     
@@ -30,19 +30,19 @@ async def handle_navigation_callback(
             user_state.go_prev()
             await update_book_message(query, user_state)
         else:
-            await query.answer("Это первая книга", show_alert=False)
+            await query.answer("This is the first book", show_alert=False)
     
     elif callback_data == "next_book":
         if user_state.can_go_next():
             user_state.go_next()
             await update_book_message(query, user_state)
         else:
-            await query.answer("Это последняя книга", show_alert=False)
+            await query.answer("This is the last book", show_alert=False)
     
     elif callback_data == "new_search":
         state_manager.clear_state(user_id)
         await query.edit_message_text(
-            "🔄 Начните новый поиск, отправив мне ваш запрос!"
+            "🔄 Start a new search by sending me your query!"
         )
 
 
@@ -50,7 +50,7 @@ async def update_book_message(query, user_state):
     """Update book message with new book and navigation buttons"""
     current_book = user_state.get_current_book()
     if not current_book:
-        await query.edit_message_text("Книга не найдена.")
+        await query.edit_message_text("Book not found.")
         return
     
     # Format book message
@@ -72,18 +72,18 @@ async def update_book_message(query, user_state):
     # Previous button
     if user_state.can_go_prev():
         buttons_row.append(
-            InlineKeyboardButton("← Назад", callback_data="prev_book")
+            InlineKeyboardButton("← Back", callback_data="prev_book")
         )
     
     # Next button
     if user_state.can_go_next():
         buttons_row.append(
-            InlineKeyboardButton("Далее →", callback_data="next_book")
+            InlineKeyboardButton("Next →", callback_data="next_book")
         )
     else:
         # Last book - show "New Search" button
         buttons_row.append(
-            InlineKeyboardButton("🔄 Новый поиск", callback_data="new_search")
+            InlineKeyboardButton("🔄 New Search", callback_data="new_search")
         )
     
     if buttons_row:
@@ -97,4 +97,3 @@ async def update_book_message(query, user_state):
         parse_mode='HTML',
         reply_markup=reply_markup
     )
-

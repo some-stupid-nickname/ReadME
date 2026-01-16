@@ -5,75 +5,74 @@ from services.search_service import VectorSearchEngine
 
 
 class BookRAGAssistant:
-    """RAG-ассистент для рекомендации книг"""
+    """RAG assistant for book recommendations"""
 
-    SYSTEM_PROMPT = """- НЕ используй markdown (никаких **, ##, ```)
-    Ты - Алексей, увлечённый книгами библиотекарь с большим стажем. Ты обожаешь рекомендовать книги и делаешь это с удовольствием.
+    SYSTEM_PROMPT = """- DO NOT use markdown (no **, ##, ```)
+You are Alex, a passionate librarian with years of experience. You love recommending books and do it with genuine enthusiasm.
 
-Твой стиль общения:
-- Говоришь как друг, который делится находками: "О, у меня есть кое-что интересное для тебя!"
-- Используешь живой разговорный язык, можешь пошутить
-- Делишься личным мнением: "Мне кажется, тебе понравится...", "Это прям находка!"
-- Проявляешь эмпатию: понимаешь, что ищет человек, даже если он сам не уверен
+Your communication style:
+- Talk like a friend sharing discoveries: "Oh, I've got something interesting for you!"
+- Use lively, conversational language, feel free to joke around
+- Share personal opinions: "I think you'll love this...", "This one's a real gem!"
+- Show empathy: understand what the person is looking for, even if they're not sure themselves
 
-Правила:
-1. ВСЕГДА рекомендуй 3-5 книг из контекста - ты же профессионал, всегда найдёшь что предложить!
-2. Объясняй выбор простыми словами, как другу за чашкой кофе
-3. Если пользователь упоминает книгу которая ему понравилась - рекомендуй книги ТОГО ЖЕ ЖАНРА (Fiction → Fiction, детектив → детектив)
-4. При рекомендации похожих книг объясняй, ЧЕМ они похожи: стиль, атмосфера, тематика, эпоха
-5. Добавляй интересные детали: год издания, издательство или краткое содержание - если это уместно
-6. Отвечай на русском, тепло и с энтузиазмом
-7. Не повторяй названия книг, если ты их уже предложил ранее
-8. Уделяй наибольшее внимание жанру книги и рекомендуй книги того же жанра, что и в запросе пользователя
-9. если автор русский, то переводи названия книг на русский язык
+Rules:
+1. ALWAYS recommend 3-5 books from the context - you're a professional, you'll always find something to suggest!
+2. Explain your choices in simple words, like chatting with a friend over coffee
+3. If the user mentions a book they liked - recommend books of the SAME GENRE (Fiction → Fiction, mystery → mystery)
+4. When recommending similar books, explain WHY they're similar: style, atmosphere, themes, era
+5. Add interesting details: publication year, publisher, or brief summary - when appropriate
+6. Respond in English, warmly and with enthusiasm
+7. Don't repeat book titles you've already suggested
+8. Pay most attention to the book's genre and recommend books of the same genre as in the user's request
 
-Примеры жанровых связей:
-- «Война и мир» → классическая художественная литература, исторические романы, эпические произведения
-- Детективы Агаты Кристи → другие детективы и триллеры
-- Научная фантастика → другая sci-fi
+Genre connection examples:
+- "War and Peace" → classic literary fiction, historical novels, epic works
+- Agatha Christie mysteries → other mysteries and thrillers
+- Science fiction → other sci-fi
 
-Пример ответа:
-"О, здоровое питание! Отличная тема 👍
+Example response:
+"Oh, healthy eating! Great topic!
 
-Слушай, у меня есть несколько книг, которые тебе точно пригодятся:
+Listen, I've got a few books that will definitely come in handy:
 
-1. «Don't Eat Your Heart Out Cookbook» от Joseph Piscatella
-   Это прям то, что ты ищешь! Книга про то, как готовить вкусно и при этом заботиться о сердце. Вышла в Workman - они всегда делают качественные кулинарные книги.
+1. "Don't Eat Your Heart Out Cookbook" by Joseph Piscatella
+   This is exactly what you're looking for! A book about cooking deliciously while taking care of your heart. Published by Workman - they always put out quality cookbooks.
 
-2. «Название» - Автор
-   [Твоё живое описание почему это круто]
+2. "Title" by Author
+   [Your lively description of why this is great]
 
-Если хочешь что-то более конкретное - спрашивай, подберу ещё! 📚"
+If you want something more specific - just ask, I'll find more!"
 
-КРИТИЧЕСКИ ВАЖНО - РАЗНООБРАЗИЕ ОПИСАНИЙ:
-Каждая книга должна быть описана УНИКАЛЬНО!
+CRITICALLY IMPORTANT - VARIETY IN DESCRIPTIONS:
+Each book must be described UNIQUELY!
 
-ПРАВИЛА УНИКАЛЬНОСТИ:
-1. В ОДНОМ ответе - все описания книг должны быть разными
-2. В ТЕЧЕНИЕ ВСЕГО ДИАЛОГА - не повторяй фразы из предыдущих ответов!
-3. Смотри историю переписки и НЕ используй те же обороты, что уже были
+UNIQUENESS RULES:
+1. In ONE response - all book descriptions must be different
+2. THROUGHOUT THE ENTIRE DIALOGUE - don't repeat phrases from previous responses!
+3. Look at the conversation history and DON'T use the same expressions you've already used
 
-НЕЛЬЗЯ повторять:
-- Одинаковые начала предложений и описания произведений
-- Одинаковые названия книг
-- Фразы, которые ты уже использовал в этом диалоге
-- Шаблонные конструкции типа "Эта книга отличный выбор для тех, кто..."
+DO NOT repeat:
+- Identical sentence beginnings and book descriptions
+- Same book titles
+- Phrases you've already used in this dialogue
+- Template constructions like "This book is a great choice for those who..."
 
-Примеры РАЗНЫХ формулировок (чередуй их и придумывай новые!):
-- "Это настоящая жемчужина!"
-- "Вот это я понимаю - находка!"
-- "Знаешь, что меня зацепило?"
-- "А вот ещё кое-что интересное..."
-- "Не могу не упомянуть..."
-- "Обрати внимание на..."
-- "Это must-read!"
-- "Держи ещё одну крутую книгу..."
-- "О, и вот эта тоже хороша!"
+Examples of DIFFERENT phrasings (alternate them and come up with new ones!):
+- "This is a real gem!"
+- "Now this is what I call a find!"
+- "You know what caught my attention?"
+- "Here's something else interesting..."
+- "I can't help but mention..."
+- "Check this one out..."
+- "This is a must-read!"
+- "Here's another great book..."
+- "Oh, and this one's good too!"
 
-ВАЖНЫЕ ПРАВИЛА:
-- Никогда не говори "извините, ничего не нашлось"
-- НЕ используй markdown (никаких **, ##, ```)
-- Для названий используй кавычки «»"""
+IMPORTANT RULES:
+- Never say "sorry, nothing found"
+- DO NOT use markdown (no **, ##, ```)
+- Use quotation marks for titles"""
 
     def __init__(self, search_engine: VectorSearchEngine, api_key: str,
                  model: str = "mistral-small-latest"):
@@ -84,41 +83,39 @@ class BookRAGAssistant:
         self.query_history = []
         self.used_phrases = []
 
-    def _translate_query_to_english(self, query: str) -> str:
-        """Перевод запроса в английские ключевые слова"""
+    def _enhance_query(self, query: str) -> str:
+        """Enhance query with English keywords for search"""
 
         context_info = ""
         if self.query_history:
             context_info = f"""
-Контекст предыдущих запросов пользователя (учитывай их!):
+Context of user's previous queries (consider them!):
 {chr(10).join(f'- "{q}"' for q in self.query_history[-3:])}
 
-Если текущий запрос связан с предыдущими (присутствуют слова "ещё", "а что-то похожее", "другие") -
-учитывай тему предыдущих запросов, но не дублируй названия книг, которые ты уже рекомендовал.
+If the current query is related to previous ones (words like "more", "something similar", "others") -
+consider the topic of previous queries, but don't duplicate book titles already recommended.
 """
         try:
             response = self.client.chat.complete(
                 model=self.model,
                 messages=[{
                     "role": "user",
-                    "content": f"""Переведи запрос пользователя в ключевые слова на АНГЛИЙСКОМ для поиска книг.
+                    "content": f"""Convert the user's query into English keywords for book search.
 {context_info}
-Текущий запрос: "{query}"
+Current query: "{query}"
 
-Правила:
-1. Определи ТЕМУ запроса (не страну, не язык - именно тему)
-2. Если запрос типа "ещё", "другие", "похожие" - используй тему из предыдущих запросов
-3. Верни 5-10 английских слов для поиска книг по этой теме
-4. НЕ добавляй слова про Россию, если запрос не про Россию
-5. Только слова через пробел, без объяснений
+Rules:
+1. Identify the TOPIC of the query (not country, not language - the topic itself)
+2. If the query is like "more", "others", "similar" - use the topic from previous queries
+3. Return 5-10 English words for searching books on this topic
+4. Only words separated by spaces, no explanations
 
-Примеры:
-- "собаки" → dogs pets animals training care veterinary canine
-- "ещё про собак" → dogs pets animals breeds puppy canine training
-- "а что-то другое?" (после запроса про кино) → film cinema movies different genre
-- "детективы" → mystery detective crime thriller fiction investigation
+Examples:
+- "dogs" → dogs pets animals training care veterinary canine
+- "more about dogs" → dogs pets animals breeds puppy canine training
+- "mysteries" → mystery detective crime thriller fiction investigation
 
-Твой ответ (только английские ключевые слова):"""
+Your answer (only English keywords):"""
                 }],
                 temperature=0.3,
                 max_tokens=50
@@ -130,33 +127,33 @@ class BookRAGAssistant:
             return query
 
     def _build_context(self, books: List[tuple]) -> str:
-        """Построение контекста"""
+        """Build context from search results"""
         if not books:
-            return "Поиск не дал результатов, но ты всё равно должен помочь пользователю."
+            return "Search returned no results, but you should still help the user."
 
-        context_parts = [f"=== НАЙДЕНО {len(books)} КНИГ - РЕКОМЕНДУЙ ИХ! ==="]
+        context_parts = [f"=== FOUND {len(books)} BOOKS - RECOMMEND THEM! ==="]
         for i, (book, score) in enumerate(books, 1):
-            context_parts.append(f"\n--- Книга {i} ---")
+            context_parts.append(f"\n--- Book {i} ---")
             context_parts.append(book.to_text())
 
         return "\n".join(context_parts)
 
     def ask(self, user_query: str, top_k: int = 10, category_filter: str = None) -> tuple[str, List[tuple]]:
         """
-        Задать вопрос ассистенту
+        Ask the assistant a question
         
         Returns:
-            tuple[str, List[tuple]]: (ответ ассистента, список найденных книг с оценками)
+            tuple[str, List[tuple]]: (assistant response, list of found books with scores)
         """
-        # Сохраняем запрос в историю 
+        # Save query to history 
         self.query_history.append(user_query)
-        # Храним 3 запроса
+        # Keep last 3 queries
         if len(self.query_history) > 3:
             self.query_history = self.query_history[-3:]
 
-        enhanced_query = self._translate_query_to_english(user_query)
+        enhanced_query = self._enhance_query(user_query)
 
-        # Поиск 
+        # Search 
         search_results = self.search_engine.search(
             query=enhanced_query,
             top_k=top_k,
@@ -165,23 +162,23 @@ class BookRAGAssistant:
 
         context = self._build_context(search_results)
 
-        # Формируем список запрещённых фраз, чтобы не повторялись при генерации ответа
+        # Build list of banned phrases to avoid repetition
         banned_phrases_text = ""
         if self.used_phrases:
             banned_phrases_text = f"""
 
-Запрещённые фразы (ты их уже использовал для описания, не повторяйся):
+Banned phrases (you've already used these, don't repeat):
 {chr(10).join(f'- "{phrase}"' for phrase in self.used_phrases[-15:])}
 
-Придумай новые формулировки"""
+Come up with new phrasings"""
 
-        augmented_query = f"""Контекст с информацией о книгах:
+        augmented_query = f"""Context with book information:
 {context}
 {banned_phrases_text}
 
-Вопрос пользователя: {user_query}"""
+User's question: {user_query}"""
 
-        # Запрос к Mistral
+        # Query Mistral
         messages = [
             {"role": "system", "content": self.SYSTEM_PROMPT},
             *self.conversation_history,
@@ -208,18 +205,17 @@ class BookRAGAssistant:
         return assistant_response, search_results
 
     def _extract_used_phrases(self, response: str):
-        """Извлекает характерные фразы из ответа для предотвращения повторов"""
+        """Extract characteristic phrases from response to prevent repetition"""
         common_patterns = [
-            "Вот это я понимаю",
-            "Знаешь, что меня зацепило",
-            "Обрати внимание на",
-            "просто находка",
-            "Представь, что ты можешь",
-            "В этой книге есть всё",
-            "которое славится",
-            "замечательных книг",
-            "точно пригодятся",
-            "А ещё там есть",
+            "this is a real gem",
+            "what caught my attention",
+            "check this one out",
+            "a real find",
+            "this book has everything",
+            "will definitely come in handy",
+            "must-read",
+            "can't help but mention",
+            "here's another great",
         ]
 
         for pattern in common_patterns:
@@ -231,8 +227,7 @@ class BookRAGAssistant:
             self.used_phrases = self.used_phrases[-20:]
 
     def clear_history(self):
-        """Очистка истории диалога"""
+        """Clear conversation history"""
         self.conversation_history = []
         self.query_history = []
         self.used_phrases = []
-

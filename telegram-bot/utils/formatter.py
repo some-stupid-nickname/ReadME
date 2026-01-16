@@ -15,7 +15,7 @@ def format_intro_message(intro_text: str) -> str:
         Formatted message for Telegram
     """
     if not intro_text:
-        return "Вот подборка книг для вас:"
+        return "Here's a selection of books for you:"
     
     # Clean up the text
     text = intro_text.strip()
@@ -55,16 +55,16 @@ def format_book_message(
         author = book.author.strip()
         if author.startswith("By "):
             author = author[3:].strip()
-        lines.append(f"👤 Автор: {escape_html(author)}")
+        lines.append(f"👤 Author: {escape_html(author)}")
     else:
-        lines.append("👤 Автор: Не указан")
+        lines.append("👤 Author: Not specified")
     
     # Genres
     if book.genres and len(book.genres) > 0:
         genres_str = ", ".join(book.genres)
-        lines.append(f"🏷️ Жанры: {escape_html(genres_str)}")
+        lines.append(f"🏷️ Genres: {escape_html(genres_str)}")
     else:
-        lines.append("🏷️ Жанры: Не указаны")
+        lines.append("🏷️ Genres: Not specified")
     
     # Description
     lines.append("")  # Empty line
@@ -75,22 +75,22 @@ def format_book_message(
             desc = desc[:500] + "..."
         lines.append(f"📖 <i>{escape_html(desc)}</i>")
     else:
-        lines.append("📖 <i>Описание отсутствует</i>")
+        lines.append("📖 <i>No description available</i>")
     
     # Recommendation
     if recommendation_text:
         lines.append("")  # Empty line
-        lines.append("💬 <b>Рекомендация:</b>")
+        lines.append("💬 <b>Recommendation:</b>")
         # Clean and format recommendation
         rec_clean = recommendation_text.strip()
-        # Remove leading "«" and "»" if present
+        # Remove leading quotes if present
         rec_clean = re.sub(r'^[«"]\s*', '', rec_clean)
         rec_clean = re.sub(r'\s*[»"]\s*$', '', rec_clean)
         lines.append(escape_html(rec_clean))
     
     # Page indicator
     lines.append("")  # Empty line
-    lines.append(f"📄 Книга {current} из {total}")
+    lines.append(f"📄 Book {current} of {total}")
     
     return "\n".join(lines)
 
@@ -112,4 +112,3 @@ def escape_html(text: str) -> str:
             .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;"))
-
