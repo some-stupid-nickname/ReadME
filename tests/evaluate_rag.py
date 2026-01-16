@@ -460,8 +460,12 @@ def main():
     if not args.model:
         args.model = "mistral-small-latest" if args.provider == "mistral" else "gpt-4o-mini"
 
-    # Initialize evaluator
-    evaluator = RAGEvaluator(judge_model=args.model, llm_provider=args.provider)
+    # Initialize evaluator with path to backend Qdrant storage
+    evaluator = RAGEvaluator(
+        judge_model=args.model,
+        llm_provider=args.provider,
+        qdrant_path="../backend/qdrant_storage"
+    )
 
     if args.query:
         # Evaluate single query
