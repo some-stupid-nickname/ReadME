@@ -3,6 +3,7 @@ from functools import lru_cache
 from services.rag_service import BookRAGAssistant
 from services.search_service import VectorSearchEngine
 from services.database_service import BookDatabase
+from services.query_enrichment_service import QueryEnrichmentService
 from core.config import settings, get_books_db_path
 
 
@@ -20,3 +21,11 @@ def get_rag_assistant() -> BookRAGAssistant:
         api_key=settings.mistral_api_key
     )
 
+
+@lru_cache()
+def get_query_enrichment_service() -> QueryEnrichmentService:
+    """
+    Get or create query enrichment service instance (singleton pattern)
+    This function is cached, so the same instance is reused across requests
+    """
+    return QueryEnrichmentService(api_key=settings.mistral_api_key)
