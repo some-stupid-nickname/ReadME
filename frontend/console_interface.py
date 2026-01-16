@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from sentence_transformers import SentenceTransformer
 from mistralai import Mistral
 from dotenv import load_dotenv
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+from services.query_enrichment_service import QueryEnrichmentService
 
 # Загрузка переменных окружения
 load_dotenv(".env")
@@ -67,7 +70,7 @@ class BookDatabase:
         for row in rows:
             point_data = pickle.loads(row[1])
 
-            # Извлечение данных 
+            # Извлечение данных
             point_id = point_data.id
             vector = list(point_data.vector)
             payload = point_data.payload
@@ -270,7 +273,7 @@ class BookRAGAssistant:
 
     def ask(self, user_query: str, top_k: int = 10, category_filter: str = None) -> str:
         """Задать вопрос ассистенту"""
-        # Сохраняем запрос в историю 
+        # Сохраняем запрос в историю
         self.query_history.append(user_query)
         # Храним 3 запроса
         if len(self.query_history) > 3:
@@ -278,7 +281,7 @@ class BookRAGAssistant:
 
         enhanced_query = self._translate_query_to_english(user_query)
 
-        # Поиск 
+        # Поиск
         search_results = self.search_engine.search(
             query=enhanced_query,
             top_k=top_k,
@@ -313,7 +316,7 @@ class BookRAGAssistant:
         response = self.client.chat.complete(
             model=self.model,
             messages=messages,
-            temperature=0.85,  
+            temperature=0.85,
             max_tokens=1024
         )
 
@@ -359,7 +362,7 @@ class BookRAGAssistant:
         self.used_phrases = []
         print("История очищена")
 
-def interactive_chat(assistant):
+def interactive_chat(assistant, enrichment_service=None):
     """Интерактивный чат"""
     print("-*" * 30)
     print("📚 Книжный RAG-ассистент"+"\n")
@@ -381,6 +384,31 @@ def interactive_chat(assistant):
                 assistant.clear_history()
                 continue
 
+            # Check if query needs clarification (if enrichment service is available)
+            if enrichment_service:
+                try:
+                    is_vague = enrichment_service.is_query_vague(user_input)
+
+                    if is_vague:
+                        # Generate clarifying questions
+                        questions = enrichment_service.generate_clarifying_questions(user_input)
+                        print(f"\n🤖 {questions}\n")
+
+                        # Get user's clarification
+                        clarification = input("Вы: ").strip()
+
+                        if clarification:
+                            # Enrich query with context
+                            enriched_query = enrichment_service.enrich_query_with_context(
+                                original_query=user_input,
+                                user_context=clarification
+                            )
+                            print(f"[Обогащённый запрос: {enriched_query}]\n")
+                            user_input = enriched_query
+                except Exception as e:
+                    # If enrichment fails, continue with original query
+                    print(f"[Предупреждение: ошибка обогащения запроса - {str(e)}]")
+
             response = assistant.ask(user_input)
             print(f"\n🤖 Ассистент: {response}\n")
 
@@ -401,7 +429,15 @@ def main():
         api_key=MISTRAL_API_KEY
     )
 
-    interactive_chat(assistant)
+    # Initialize query enrichment service
+    try:
+        enrichment_service = QueryEnrichmentService(api_key=MISTRAL_API_KEY)
+        print("✓ Query enrichment enabled (vague queries will be clarified)\n")
+    except Exception as e:
+        print(f"⚠ Query enrichment disabled: {str(e)}\n")
+        enrichment_service = None
+
+    interactive_chat(assistant, enrichment_service)
 
 if __name__ == "__main__":
     main()

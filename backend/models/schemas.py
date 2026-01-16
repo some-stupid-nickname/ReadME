@@ -8,6 +8,24 @@ class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Search query")
 
 
+class ClarificationRequest(BaseModel):
+    """Request schema for query clarification check"""
+    query: str = Field(..., min_length=1, description="User's search query to analyze")
+
+
+class ClarificationResponse(BaseModel):
+    """Response schema for query clarification"""
+    is_vague: bool = Field(..., description="Whether the query needs clarification")
+    clarifying_questions: Optional[str] = Field(None, description="Questions to ask user (if vague)")
+    original_query: str = Field(..., description="Original query from user")
+
+
+class EnrichedSearchRequest(BaseModel):
+    """Request schema for enriched book search"""
+    original_query: str = Field(..., min_length=1, description="User's original query")
+    user_context: str = Field(..., min_length=1, description="Additional context from user")
+
+
 class BookInfo(BaseModel):
     """Book information for API response"""
     id: str = Field(..., description="Book ID")
@@ -61,4 +79,3 @@ class Message(BaseModel):
     content: str
     created_at: str
     feedback: Optional[str] = None
-
