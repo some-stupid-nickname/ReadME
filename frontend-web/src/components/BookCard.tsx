@@ -27,15 +27,24 @@ export const BookCard: React.FC<BookCardProps> = ({
   onViewDetails,
   compact = false,
 }) => {
-  const bookId = 'book_id' in book ? book.book_id : '';
+  const bookId = 'book_id' in book ? book.book_id : ('id' in book ? (book as any).id : '');
   const coverUrl = book.cover_url;
   const genres = book.genres || [];
   const inLibrary = 'in_library' in book ? book.in_library : false;
 
+  // Don't render card if bookId is missing (defensive check)
+  if (!bookId) {
+    console.warn('BookCard rendered without valid bookId:', book);
+    return null;
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 flex flex-col">
-      {/* Cover Image */}
-      <div className="flex-shrink-0 mb-3">
+      {/* Cover Image - clickable */}
+      <div
+        className="flex-shrink-0 mb-3 cursor-pointer"
+        onClick={() => onViewDetails && bookId && onViewDetails(bookId)}
+      >
         {coverUrl ? (
           <img
             src={coverUrl}
@@ -52,8 +61,11 @@ export const BookCard: React.FC<BookCardProps> = ({
         </div>
       </div>
 
-      {/* Book Info */}
-      <div className="flex-1">
+      {/* Book Info - clickable */}
+      <div
+        className="flex-1 cursor-pointer"
+        onClick={() => onViewDetails && bookId && onViewDetails(bookId)}
+      >
         <h3 className="font-semibold text-lg text-gray-900 mb-1 line-clamp-2">
           {book.title || 'Untitled'}
         </h3>

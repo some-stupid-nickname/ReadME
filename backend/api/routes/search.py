@@ -37,15 +37,23 @@ async def book_to_book_info(
     # Get cover URL from cache
     cover_url = await db.get_cover_url(str(book.id))
     
-    # If not in cache and service is available, trigger background fetch
+    # If not in cache and service is available, fetch synchronously with timeout
     if cover_url is None and cover_service:
         import asyncio
         from loguru import logger
-        logger.debug(f"Triggering background cover fetch for: {book.title}")
-        # Use task to not block search response
-        asyncio.create_task(
-            cover_service.get_cover_url(str(book.id), book.title, book.authors)
-        )
+        try:
+            logger.debug(f"Fetching cover for: {book.title}")
+            # Await the fetch with timeout instead of background task
+            cover_url = await asyncio.wait_for(
+                cover_service.get_cover_url(str(book.id), book.title, book.authors),
+                timeout=3.0  # 3 second timeout per book
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Cover fetch timeout for: {book.title}")
+            cover_url = None
+        except Exception as e:
+            logger.warning(f"Cover fetch failed for {book.title}: {e}")
+            cover_url = None
 
     return BookInfo(
         id=str(book.id),
@@ -84,11 +92,14 @@ async def search_books(
             top_k=10
         )
 
-        # Convert books to API format with cover URLs
-        books = []
-        for book, score in search_results:
-            book_info = await book_to_book_info(book, score, db, cover_service)
-            books.append(book_info)
+        # Convert books to API format with cover URLs (fetch in parallel)
+        import asyncio
+        book_tasks = [
+            book_to_book_info(book, score, db, cover_service)
+            for book, score in search_results
+        ]
+        # Parallel execution - all covers fetched simultaneously
+        books = await asyncio.gather(*book_tasks)
 
         return SearchResponse(
             response=response_text,
@@ -190,11 +201,13 @@ async def enriched_search(
             top_k=10
         )
 
-        # Convert books to API format with cover URLs
-        books = []
-        for book, score in search_results:
-            book_info = await book_to_book_info(book, score, db, cover_service)
-            books.append(book_info)
+        # Convert books to API format with cover URLs (fetch in parallel)
+        import asyncio
+        book_tasks = [
+            book_to_book_info(book, score, db, cover_service)
+            for book, score in search_results
+        ]
+        books = await asyncio.gather(*book_tasks)
 
         return SearchResponse(
             response=response_text,
@@ -218,7 +231,8 @@ async def personalized_search(
     request: SearchRequest,
     current_user: dict = Depends(get_current_user),
     assistant: BookRAGAssistant = Depends(get_rag_assistant),
-    db = Depends(get_postgres_db)
+    db = Depends(get_postgres_db),
+    cover_service: CoverFetchService = Depends(get_cover_fetch_service)
 ) -> PersonalizedSearchResponse:
     """
     Personalized book search using user's reading history.
@@ -254,10 +268,11 @@ async def personalized_search(
             sqlite_db=sqlite_book_service
         )
         
-        # Perform personalized search
+        # Perform personalized search with cover service
         result = await personalized_service.search(
             user_id=current_user['id'],
-            query=request.query.strip()
+            query=request.query.strip(),
+            cover_service=cover_service  # Pass cover service
         )
         
         return result

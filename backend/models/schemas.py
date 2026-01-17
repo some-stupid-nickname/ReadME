@@ -139,6 +139,7 @@ class OnboardingComplete(BaseModel):
 class BookDetailResponse(BaseModel):
     """Extended book info with additional fields - for new endpoints only"""
     book_id: str
+    id: str  # Alias for book_id to match BookInfo schema (for frontend compatibility)
     title: str
     author: str  # First author for display
     authors: str  # Full comma-separated list from DB

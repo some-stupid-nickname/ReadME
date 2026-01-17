@@ -36,7 +36,8 @@ class PersonalizedSearchService:
     async def search(
         self,
         user_id: int,
-        query: str
+        query: str,
+        cover_service = None  # Optional CoverFetchService dependency
     ) -> PersonalizedSearchResponse:
         """
         Perform personalized search with context from user's library.
@@ -45,6 +46,7 @@ class PersonalizedSearchService:
         Args:
             user_id: Authenticated user ID
             query: Search query
+            cover_service: Optional cover fetch service for fetching covers
         
         Returns:
             PersonalizedSearchResponse with metadata
@@ -71,9 +73,11 @@ class PersonalizedSearchService:
         # Returns tuple: (response_text, list of (Book, score))
         rag_response_text, rag_books = await self.rag.ask(enhanced_query)
         
-        # Transform rag_books to BookInfo list with cover URLs
-        books_list = []
-        for book_obj, score in rag_books:
+        # Transform rag_books to BookInfo list with cover URLs (fetch in parallel)
+        import asyncio
+        
+        async def transform_book(book_obj, score):
+            """Transform Book model to BookInfo with cover fetching"""
             # Extract authors - handle both string and list
             authors = book_obj.authors
             if isinstance(authors, list):
@@ -88,10 +92,21 @@ class PersonalizedSearchService:
             else:
                 genres = []
             
-            # Get cover URL from cache (don't fetch - too slow for search results)
+            # Get cover URL from cache
             cover_url = await self.pg_db.get_cover_url(str(book_obj.id))
             
-            books_list.append(BookInfo(
+            # If not cached and service available, fetch with timeout
+            if cover_url is None and cover_service:
+                try:
+                    cover_url = await asyncio.wait_for(
+                        cover_service.get_cover_url(str(book_obj.id), book_obj.title, str(authors)),
+                        timeout=3.0
+                    )
+                except Exception as e:
+                    logger.warning(f"Cover fetch failed for {book_obj.title}: {e}")
+                    cover_url = None
+            
+            return BookInfo(
                 id=str(book_obj.id),
                 title=book_obj.title,
                 author=author_display,
@@ -99,7 +114,11 @@ class PersonalizedSearchService:
                 description=book_obj.description if hasattr(book_obj, 'description') else "",
                 cover_url=cover_url,
                 source_link=None
-            ))
+            )
+        
+        # Parallel cover fetching
+        book_tasks = [transform_book(book, score) for book, score in rag_books]
+        books_list = await asyncio.gather(*book_tasks)
         
         # Step 4: Post-filter - remove books already in library
         filtered_books = await self._filter_library_books(books_list, user_id)
