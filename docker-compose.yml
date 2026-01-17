@@ -78,7 +78,7 @@ services:
     container_name: rag-telegram-bot
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      API_URL: http://backend:8000
+      BACKEND_API_URL: http://backend:8000
     networks:
       - rag-network
     depends_on:

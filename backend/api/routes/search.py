@@ -38,6 +38,7 @@ async def book_to_book_info(
     cover_url = await db.get_cover_url(str(book.id))
     
     # If not in cache and service is available, fetch synchronously with timeout
+    # Increased timeout to allow full fallback strategy (Google Books -> DuckDuckGo -> Placeholder)
     if cover_url is None and cover_service:
         import asyncio
         from loguru import logger
@@ -46,13 +47,20 @@ async def book_to_book_info(
             # Await the fetch with timeout instead of background task
             cover_url = await asyncio.wait_for(
                 cover_service.get_cover_url(str(book.id), book.title, book.authors),
-                timeout=3.0  # 3 second timeout per book
+                timeout=10.0  # Increased to allow full fallback chain
             )
         except asyncio.TimeoutError:
-            logger.warning(f"Cover fetch timeout for: {book.title}")
-            cover_url = None
+            # Even on timeout, get_cover_url should return placeholder, but log it
+            logger.warning(f"Cover fetch timeout for: {book.title}, using placeholder")
+            # Try one more time without timeout to get at least placeholder
+            try:
+                cover_url = await cover_service.get_cover_url(str(book.id), book.title, book.authors)
+            except Exception as e2:
+                logger.error(f"Cover fetch completely failed for {book.title}: {e2}")
+                cover_url = None
         except Exception as e:
             logger.warning(f"Cover fetch failed for {book.title}: {e}")
+            # get_cover_url should always return a URL, but if it doesn't, set to None
             cover_url = None
 
     return BookInfo(

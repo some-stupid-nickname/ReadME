@@ -1,10 +1,13 @@
 """Search handler for Telegram bot"""
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from utils.api_client import APIClient
 from utils.parser import parse_llm_response
 from utils.formatter import format_intro_message, format_book_message
 from state import StateManager
+
+logger = logging.getLogger(__name__)
 
 
 async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -34,9 +37,12 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         api_client = APIClient()
+        logger.info(f"User {user_id} searching for: {query}")
 
         # First, check if query needs clarification
+        logger.debug(f"Checking if query needs clarification for user {user_id}")
         clarification_response = await api_client.clarify_query(query)
+        logger.debug(f"Clarification check result: is_vague={clarification_response.is_vague}")
 
         if clarification_response.is_vague:
             # Query is too vague, ask for clarification
@@ -51,7 +57,9 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Query is clear enough, proceed with normal search
+        logger.info(f"Performing search for user {user_id}")
         search_response = await api_client.search_books(query)
+        logger.info(f"Search completed for user {user_id}, found {len(search_response.books)} books")
 
         # Parse LLM response
         parsed = parse_llm_response(
@@ -82,8 +90,11 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Please try again later or modify your query."
         )
         await update.message.reply_text(error_message)
-        # Log error in production
-        print(f"Search error for user {user_id}: {str(e)}")
+        # Log error with full traceback
+        logger.error(
+            f"Search error for user {user_id}, query: '{query}'",
+            exc_info=True
+        )
 
 
 async def handle_clarification_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -108,12 +119,17 @@ async def handle_clarification_response(update: Update, context: ContextTypes.DE
 
     try:
         api_client = APIClient()
+        logger.info(
+            f"User {user_id} enriched search: "
+            f"original='{user_state.original_vague_query}', context='{user_context}'"
+        )
 
         # Search with enriched query
         search_response = await api_client.enriched_search(
             original_query=user_state.original_vague_query,
             user_context=user_context
         )
+        logger.info(f"Enriched search completed for user {user_id}, found {len(search_response.books)} books")
 
         # Parse LLM response
         parsed = parse_llm_response(
@@ -144,8 +160,13 @@ async def handle_clarification_response(update: Update, context: ContextTypes.DE
             "Попробуйте позже или измените ваш запрос."
         )
         await update.message.reply_text(error_message)
-        # Log error in production
-        print(f"Enriched search error for user {user_id}: {str(e)}")
+        # Log error with full traceback
+        logger.error(
+            f"Enriched search error for user {user_id}, "
+            f"original_query: '{user_state.original_vague_query}', "
+            f"user_context: '{user_context}'",
+            exc_info=True
+        )
 
 
 async def send_book_message(

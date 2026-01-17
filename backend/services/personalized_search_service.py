@@ -96,14 +96,25 @@ class PersonalizedSearchService:
             cover_url = await self.pg_db.get_cover_url(str(book_obj.id))
             
             # If not cached and service available, fetch with timeout
+            # Increased timeout to allow full fallback strategy (Google Books -> DuckDuckGo -> Placeholder)
             if cover_url is None and cover_service:
                 try:
                     cover_url = await asyncio.wait_for(
                         cover_service.get_cover_url(str(book_obj.id), book_obj.title, str(authors)),
-                        timeout=3.0
+                        timeout=10.0  # Increased to allow full fallback chain
                     )
+                except asyncio.TimeoutError:
+                    # Even on timeout, get_cover_url should return placeholder, but log it
+                    logger.warning(f"Cover fetch timeout for {book_obj.title}, using placeholder")
+                    # Try one more time without timeout to get at least placeholder
+                    try:
+                        cover_url = await cover_service.get_cover_url(str(book_obj.id), book_obj.title, str(authors))
+                    except Exception as e2:
+                        logger.error(f"Cover fetch completely failed for {book_obj.title}: {e2}")
+                        cover_url = None
                 except Exception as e:
                     logger.warning(f"Cover fetch failed for {book_obj.title}: {e}")
+                    # get_cover_url should always return a URL, but if it doesn't, set to None
                     cover_url = None
             
             return BookInfo(

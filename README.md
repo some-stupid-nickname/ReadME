@@ -5,8 +5,9 @@
 ## Структура проекта
 
 ```
-backend/          # FastAPI + LangChain RAG pipeline (см. backend/README.md)
+backend/          # FastAPI + LangChain RAG pipeline
 frontend/         # CLI консольный интерфейс
+frontend-web/     # React + TypeScript веб-интерфейс
 telegram-bot/     # Telegram бот
 data/
   ├── raw/        # Исходные датасеты
@@ -15,17 +16,25 @@ data/
 tests/            # Валидационный датасет и тесты
 docs/             # Документация
 docker/           # Docker конфигурация для контейнеризации
+docker-compose.yml # Docker Compose для запуска всех сервисов
 ```
 
 ## Технологический стек
 
-Наш проект построен на современном стеке технологий для работы с большими языковыми моделями и векторным поиском.
-Backend реализован на FastAPI с использованием фреймворка LangChain для построения RAG-пайплайна.
-В качестве векторной базы данных используется SQLite с встроенным векторным поиском, который хранит эмбеддинги всех книг из датасета.
-Для генерации ответов задействован Mistral API.
+**Backend:**
+- FastAPI с использованием фреймворка LangChain для построения RAG-пайплайна
+- PostgreSQL для хранения пользовательских данных, библиотек, отзывов и персонализации
+- SQLite с встроенным векторным поиском для хранения эмбеддингов книг
+- Mistral API для генерации ответов
+- sentence-transformers (модель all-MiniLM-L6-v2) для генерации эмбеддингов
 
-Эмбеддинги текстов генерируются через библиотеку sentence-transformers (модель all-MiniLM-L6-v2).
-Система предоставляет два интерфейса: CLI консольный интерфейс и Telegram-бот (python-telegram-bot).
+**Frontend:**
+- React 18 + TypeScript + Vite для веб-интерфейса
+- TailwindCSS для стилизации
+- CLI консольный интерфейс (Python)
+
+**Интеграции:**
+- Telegram-бот (python-telegram-bot)
 
 ## Данные
 
@@ -45,11 +54,13 @@ Backend реализован на FastAPI с использованием фре
 Полная техническая документация доступна в папке `docs/`:
 - [API Reference](docs/API_SPECS.md) — спецификация всех эндпоинтов backend API
 - [Настройка Backend](docs/BACKEND_SETUP.md) — инструкции по настройке и запуску backend
-- [Примеры использования Telegram бота](docs/TELEGRAM_BOT_EXAMPLES.md) — примеры команд и запросов
 - [Docker Deployment](docs/DOCKER_DEPLOYMENT.md) — инструкции по запуску через Docker
 - [LLM Query Enrichment](docs/LLM_ENRICHMENT_FEATURE.md) — фича: уточняющие вопросы для неточных запросов
 - [Отчет по данным](docs/Отчет_Чекпоинт 1.md) — детали процесса сбора и подготовки датасета
 - [Настройка векторной БД](docs/VECTOR_DB_SETUP.md) — детали реализации SQLite Vector Search
+
+**Дополнительно:**
+- [Frontend Web README](frontend-web/README.md) — документация по веб-интерфейсу
 
 
 ## Быстрый старт
@@ -67,38 +78,62 @@ cp .env.example .env
 # Отредактируйте .env и укажите:
 # - MISTRAL_API_KEY (обязательно)
 # - TELEGRAM_BOT_TOKEN (если используете бота)
-# - BOOKS_DB_PATH (путь к data/storage.sqlite)
+# - POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB (для PostgreSQL)
 
 # 3. Запустите все сервисы
 docker-compose up -d
 
 # 4. Проверьте работу
 # Backend API: http://localhost:8000/docs
+# Web Frontend: http://localhost:80 (или порт из FRONTEND_PORT)
 # Telegram бот: начните диалог с ботом в Telegram
 ```
 
-Подробнее: [Docker Setup](docker/README.md)
+**Запущенные сервисы:**
+- PostgreSQL (порт 5432) — база данных пользователей
+- FastAPI Backend (порт 8000) — API сервер
+- React Frontend (порт 80) — веб-интерфейс
+- Telegram Bot — Telegram бот
+
+Подробнее: [Docker Deployment](docs/DOCKER_DEPLOYMENT.md)
 
 ### Вариант 2: Локальный запуск
 
 ```bash
 # 1. Установите зависимости
 pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
-# 2. Настройте переменные окружения
+# 2. Настройте PostgreSQL
+# Убедитесь, что PostgreSQL запущен и создана база данных
+# Или используйте Docker только для PostgreSQL:
+# docker-compose up -d postgres
+
+# 3. Настройте переменные окружения
 # Создайте .env в корне проекта:
 # MISTRAL_API_KEY=your_key_here
 # BOOKS_DB_PATH=data/storage.sqlite
+# POSTGRES_HOST=localhost
+# POSTGRES_PORT=5432
+# POSTGRES_USER=rag_user
+# POSTGRES_PASSWORD=rag_password
+# POSTGRES_DB=rag_db
 
-# 3. Запустите backend
+# 4. Запустите backend
 cd backend
 python -m api.main
 
-# 4. В другом терминале запустите Telegram бот (опционально)
+# 5. В другом терминале запустите веб-интерфейс (опционально)
+cd frontend-web
+npm install
+npm run dev
+# Доступен на http://localhost:5173
+
+# 6. Или запустите Telegram бот (опционально)
 cd telegram-bot
 python bot.py
 
-# 5. Или используйте CLI интерфейс
+# 7. Или используйте CLI интерфейс
 cd frontend
 python console_interface.py
 ```
@@ -131,12 +166,12 @@ git push origin feature/название-задачи
 ### Схема взаимодействия модулей
 
 ```
-┌─────────────────┐         ┌──────────────────┐
-│   CLI Interface │         │  Telegram Bot    │
-│   (Console)     │         │   (python-tg)    │
-└────────┬────────┘         └────────┬─────────┘
-         │                           │
-         └───────────┬───────────────┘
+┌─────────────────┐  ┌──────────────┐  ┌──────────────────┐
+│  Web Frontend   │  │ CLI Interface│  │  Telegram Bot    │
+│  (React + TS)   │  │  (Console)   │  │   (python-tg)    │
+└────────┬────────┘  └──────┬───────┘  └────────┬─────────┘
+         │                   │                   │
+         └───────────┬───────┴───────────────────┘
                      │ HTTP/REST
               ┌──────▼──────────────────────┐
               │      FastAPI Backend        │
@@ -148,6 +183,7 @@ git push origin feature/название-задачи
               │  │ • Embedder            │  │
               │  │ • Retriever           │  │
               │  │ • Response Generator  │  │
+              │  │ • Personalization     │  │
               │  └───────────────────────┘  │
               └──────┬──────────────────────┘
                      │
@@ -155,8 +191,9 @@ git push origin feature/название-задачи
          │           │           │
     ┌────▼────┐ ┌───▼────┐ ┌───▼─────┐
     │  LLM    │ │Postgres│ │ SQLite  │
-    │ Mistral │ │ SQL    │ │ Vector  │
-    │   API   │ │        │ │   DB    │
+    │ Mistral │ │   DB   │ │ Vector  │
+    │   API   │ │(Users, │ │   DB    │
+    │         │ │Library)│ │(Books)  │
     └─────────┘ └────────┘ └─────────┘
 ```
 
@@ -183,23 +220,33 @@ User Query → FastAPI Endpoint
 
 ### Поток обработки запроса
 ```
-1. Пользователь вводит запрос
+1. Пользователь вводит запрос (через Web/CLI/Bot)
    ↓
-2. CLI/Bot → Backend API (POST /api/search)
+2. Клиент → Backend API (POST /api/search или /api/search/personalized)
    ↓
-3. (Optional) Query Enrichment (API анализирует запрос)
+3. (Optional) Аутентификация (для персонализированного поиска)
+   ↓
+4. (Optional) Query Enrichment (API анализирует запрос)
    "хочу про космос" → Clarification Questions
    ↓
-4. Генерация эмбеддинга запроса
+5. Генерация эмбеддинга запроса
    ↓
-5. Векторный поиск в SQLite (top_k книг)
+6. Векторный поиск в SQLite (top_k книг)
    ↓
-6. LLM генерирует финальный ответ с обзорами книг
+7. (Optional) Персонализация результатов на основе:
+   - Предпочтений пользователя из PostgreSQL
+   - Истории поиска
+   - Библиотеки пользователя
    ↓
-7. Возврат ответа пользователю
+8. LLM генерирует финальный ответ с обзорами книг
+   ↓
+9. Возврат ответа клиенту
 ```
 
-Найденные книги передаются в LLM вместе с исходным запросом пользователя, и модель генерирует финальный ответ с обзорами и рекомендациями. Ответ возвращается клиенту (CLI или Telegram боту).
+**Особенности:**
+- Для анонимных пользователей доступен базовый поиск
+- Для авторизованных пользователей доступен персонализированный поиск на основе их предпочтений
+- Найденные книги передаются в LLM вместе с исходным запросом пользователя, и модель генерирует финальный ответ с обзорами и рекомендациями
 
 ## Команда
 
@@ -222,6 +269,14 @@ User Query → FastAPI Endpoint
 - Метрика поиска: косинусное сходство
 - Формат: SQLite с сериализованными векторами через pickle
 
+### База данных пользователей
+- PostgreSQL для хранения:
+  - Пользователей и аутентификации
+  - Библиотек пользователей
+  - Отзывов и рейтингов
+  - Предпочтений для персонализации
+  - Онбординга (выбранные книги при регистрации)
+
 ### RAG Evaluation (LLM-as-Judge)
 Для автоматической оценки качества рекомендаций используем подход LLM-as-Judge:
 
@@ -240,7 +295,44 @@ python evaluate_rag.py --queries-file test_queries.json --provider mistral --top
 
 # OpenAI (быстрее, платный)
 python evaluate_rag.py --queries-file test_queries.json --provider openai --top-k 5 --output results.json
+
+# RAGAS метрики (требует дополнительных зависимостей)
+pip install -r requirements_ragas.txt
+python evaluate_rag_ragas.py --queries-file test_queries.json --top-k 5
 ```
+
+### Основные API эндпоинты
+
+**Поиск:**
+- `POST /api/search` — базовый поиск (анонимный)
+- `POST /api/search/personalized` — персонализированный поиск (требует аутентификации)
+- `POST /api/search/clarify` — анализ запроса и уточняющие вопросы
+- `POST /api/search/enriched` — поиск с обогащенным контекстом
+
+**Аутентификация:**
+- `POST /api/auth/register` — регистрация пользователя
+- `POST /api/auth/login` — вход в систему
+
+**Библиотека:**
+- `GET /api/library` — получить библиотеку пользователя
+- `POST /api/library` — добавить книгу в библиотеку
+- `DELETE /api/library/{book_id}` — удалить книгу из библиотеки
+
+**Отзывы:**
+- `POST /api/reviews` — создать/обновить отзыв
+- `GET /api/reviews/{book_id}` — получить отзыв пользователя на книгу
+
+**Онбординг:**
+- `GET /api/onboarding/books` — получить список книг для онбординга
+- `POST /api/onboarding/complete` — завершить онбординг
+
+**Книги:**
+- `GET /api/books/{book_id}` — получить информацию о книге
+
+**Администрирование:**
+- `GET /api/admin/metrics` — метрики системы (требует API ключ)
+
+Полная документация: [API Reference](docs/API_SPECS.md)
 
 ## Контакты
 

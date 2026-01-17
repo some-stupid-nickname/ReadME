@@ -24,15 +24,15 @@ docker/
 ### 1. Подготовка
 
 ```bash
-cd docker
-cp .env.example .env
-# Отредактируйте .env: укажите MISTRAL_API_KEY и TELEGRAM_BOT_TOKEN
+# В корне проекта
+cp env.example .env
+# Отредактируйте .env: укажите MISTRAL_API_KEY, TELEGRAM_BOT_TOKEN и настройки PostgreSQL
 ```
 
 ### 2. Запуск
 
 ```bash
-# Сборка и запуск
+# Сборка и запуск (из корня проекта)
 docker-compose up -d --build
 ```
 
@@ -40,13 +40,20 @@ docker-compose up -d --build
 
 - Backend API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
+- Web Frontend: http://localhost:80 (или порт из `FRONTEND_PORT`)
 - Telegram Bot: начните диалог с ботом в Telegram
+
+**Запущенные сервисы:**
+- PostgreSQL (порт 5432) — база данных пользователей
+- FastAPI Backend (порт 8000) — API сервер
+- React Frontend (порт 80) — веб-интерфейс
+- Telegram Bot — Telegram бот
 
 ## Особенности текущей конфигурации
 
-1.  **Frontend**: В репозитории есть `Dockerfile.frontend`, однако в `docker-compose.yml` сервис frontend отсутствует. В данный момент основным интерфейсом являются Telegram бот и CLI консоль (`frontend/console_interface.py`).
-2.  **База данных книг**: Файл `data/storage.sqlite` пробрасывается в контейнер backend как read-only volume.
-3.  **История (PostgreSQL)**: Контейнер PostgreSQL запускается для будущего использования (история чатов), но в текущей реализации backend (версия 1.0.0) история в БД не сохраняется.
+1.  **Frontend**: React веб-интерфейс (`frontend-web/`) включен в `docker-compose.yml` и доступен на порту 80 (или значении `FRONTEND_PORT`). Также доступны Telegram бот и CLI консоль (`frontend/console_interface.py`).
+2.  **База данных книг**: Файл `data/storage.sqlite` пробрасывается в контейнер backend как read-only volume для векторного поиска.
+3.  **PostgreSQL**: Используется для хранения пользовательских данных, аутентификации, библиотек пользователей, отзывов и рейтингов, а также для персонализации поиска.
 
 ## Переменные окружения (.env)
 
