@@ -370,7 +370,13 @@ class PostgresService:
     # ============================================================
     
     async def get_cover_url(self, book_id: str) -> Optional[str]:
-        """Get cached cover URL. Returns None if not in cache or fetch failed."""
+        """
+        Get cached cover URL. 
+        
+        Returns:
+            Cover URL if cached (including placeholders), None if not in cache.
+            Note: With new fallback strategy, this should always return a URL once fetched.
+        """
         row = await self.execute_one("""
             SELECT cover_url, fetch_failed 
             FROM book_covers 
@@ -380,26 +386,35 @@ class PostgresService:
         if row is None:
             return None  # Not in cache
         
-        if row['fetch_failed']:
-            return None  # Previously tried and failed
-        
+        # Return URL even if fetch_failed=True (for old records or placeholders)
+        # New implementation always stores a URL (even if placeholder)
         return row['cover_url']
     
     async def cache_cover_url(
         self,
         book_id: str,
-        cover_url: Optional[str],
-        fetch_failed: bool = False
+        cover_url: str,  # Now always str, never None
+        source: str = 'unknown',  # NEW: track source
+        fetch_failed: bool = False  # Kept for backward compatibility
     ):
-        """Cache cover URL result (or failure)."""
+        """
+        Cache cover URL result.
+        
+        Args:
+            book_id: Book ID
+            cover_url: Cover URL (can be real URL or placeholder)
+            source: Source of cover ('google_books', 'duckduckgo', 'generated')
+            fetch_failed: Deprecated, kept for backward compatibility
+        """
         await self.execute("""
-            INSERT INTO book_covers (book_id, cover_url, fetch_failed, fetched_at)
-            VALUES ($1, $2, $3, NOW())
+            INSERT INTO book_covers (book_id, cover_url, source, fetched_at, fetch_failed)
+            VALUES ($1, $2, $3, NOW(), $4)
             ON CONFLICT (book_id) DO UPDATE SET
                 cover_url = EXCLUDED.cover_url,
-                fetch_failed = EXCLUDED.fetch_failed,
-                fetched_at = NOW()
-        """, book_id, cover_url, fetch_failed)
+                source = EXCLUDED.source,
+                fetched_at = NOW(),
+                fetch_failed = EXCLUDED.fetch_failed
+        """, book_id, cover_url, source, fetch_failed)
     
     # ============================================================
     # Recommendation Logging Methods
