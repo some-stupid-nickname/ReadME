@@ -49,6 +49,21 @@ export interface PersonalizedSearchResponse extends SearchResponse {
   context_books?: string[] | null;
 }
 
+export interface ClarificationRequest {
+  query: string;
+}
+
+export interface ClarificationResponse {
+  is_vague: boolean;
+  clarifying_questions?: string | null;
+  original_query: string;
+}
+
+export interface EnrichedSearchRequest {
+  original_query: string;
+  user_context: string;
+}
+
 // ============================================================
 // Auth Types
 // ============================================================

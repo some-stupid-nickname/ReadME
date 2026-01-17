@@ -63,43 +63,38 @@ class Settings(BaseSettings):
 
 
 def get_books_db_path() -> str:
-    """Get path to books.sqlite database file"""
+    """Get path to books database file"""
     settings = Settings()
     
     # If explicitly set in env, use it
     if settings.books_db_path:
         return settings.books_db_path
     
-    # Try to find books.sqlite or storage.sqlite in common locations
     project_root = Path(__file__).parent.parent.parent
     
-    # 1. Check in data/ directory (primary location for storage.sqlite)
-    data_storage_path = project_root / "data" / "storage.sqlite"
-    if data_storage_path.exists():
-        return str(data_storage_path)
+    # Priority: storage.sqlite (full 174k dataset) over books.sqlite (subset)
+    # 1. Check for storage.sqlite in project root (FULL dataset)
+    storage_path = project_root / "storage.sqlite"
+    if storage_path.exists() and storage_path.stat().st_size > 100_000_000:  # >100MB = full DB
+        return str(storage_path)
     
-    # 2. Check in data/ directory for books.sqlite
+    # 2. Check in project root for books.sqlite
+    root_books_path = project_root / "books.sqlite"
+    if root_books_path.exists() and root_books_path.stat().st_size > 1000:
+        return str(root_books_path)
+    
+    # 3. Check in data/ directory
     data_books_path = project_root / "data" / "books.sqlite"
-    if data_books_path.exists():
+    if data_books_path.exists() and data_books_path.stat().st_size > 1000:
         return str(data_books_path)
     
-    # 3. Check in backend/ directory
+    # 4. Check in backend/ directory
     backend_path = project_root / "backend" / "books.sqlite"
-    if backend_path.exists():
+    if backend_path.exists() and backend_path.stat().st_size > 1000:
         return str(backend_path)
-        
-    # 4. Check in frontend/ directory (where console_interface.py is)
-    frontend_path = project_root / "frontend" / "books.sqlite"
-    if frontend_path.exists():
-        return str(frontend_path)
-    
-    # 5. Check in project root
-    root_path = project_root / "books.sqlite"
-    if root_path.exists():
-        return str(root_path)
     
     # Default fallback
-    return str(data_storage_path)
+    return str(root_books_path)
 
 
 # Global settings instance

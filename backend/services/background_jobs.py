@@ -248,3 +248,25 @@ async def mark_user_for_recalculation(postgres_db: PostgresService, user_id: int
         user_id: User ID to mark
     """
     await postgres_db.mark_preference_for_recalculation(user_id)
+
+
+async def recalculate_user_preference_now(
+    postgres_db: PostgresService, 
+    sqlite_db: SQLiteBookService, 
+    user_id: int
+):
+    """
+    Immediately recalculate preference vector for a single user.
+    Use after onboarding to enable personalization right away.
+    
+    Args:
+        postgres_db: PostgreSQL service instance
+        sqlite_db: SQLite book service instance
+        user_id: User ID to recalculate
+    """
+    recalculator = PreferenceVectorRecalculator(postgres_db, sqlite_db)
+    try:
+        await recalculator._recalculate_user(user_id)
+        logger.info(f"Immediately recalculated preference vector for user {user_id}")
+    except Exception as e:
+        logger.error(f"Failed to immediately recalculate preference for user {user_id}: {e}")

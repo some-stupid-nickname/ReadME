@@ -106,6 +106,8 @@ class SQLiteBookService:
             from core.config import get_books_db_path
             self.db_path = get_books_db_path()
         self._encoder = None
+        self._books_cache: Dict[str, Dict[str, Any]] = {}  # Cache: numeric_id -> book_data
+        self._cache_loaded = False
     
     def _get_encoder(self):
         """Lazy load and cache the encoder"""
@@ -114,6 +116,54 @@ class SQLiteBookService:
             # Use same model as vector search, force CPU in Docker
             self._encoder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
         return self._encoder
+    
+    def _load_cache(self):
+        """Load all books into cache for fast lookup by numeric ID"""
+        if self._cache_loaded and len(self._books_cache) > 0:
+            return  # Already loaded
+        
+        # Prevent concurrent loading
+        if hasattr(self, '_loading') and self._loading:
+            return
+        self._loading = True
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT point FROM points")
+            rows = cursor.fetchall()
+            conn.close()
+            
+            for row in rows:
+                point_data = pickle.loads(row[0])
+                payload = point_data.payload
+                
+                # Use numeric ID from point_data, not table ID
+                numeric_id = str(point_data.id)
+                
+                publish_year = _parse_publish_year(payload.get('Publish Date (Year)'))
+                publish_month = _parse_publish_month(payload.get('Publish Date (Month)'))
+                if publish_month is None and isinstance(payload.get('Publish Date (Year)'), str):
+                    publish_month = _parse_publish_month(payload.get('Publish Date (Year)'))
+                
+                self._books_cache[numeric_id] = {
+                    'book_id': numeric_id,
+                    'title': payload.get('Title', 'Unknown'),
+                    'authors': payload.get('Authors', 'Unknown'),
+                    'category': payload.get('Category', 'Unknown'),
+                    'description': payload.get('Description', ''),
+                    'publish_year': publish_year,
+                    'publish_month': publish_month,
+                    'embedding': np.array(point_data.vector) if hasattr(point_data, 'vector') else None
+                }
+            
+            self._cache_loaded = True
+            self._loading = False
+            logger.info(f"SQLiteBookService: cached {len(self._books_cache)} books")
+        
+        except Exception as e:
+            self._loading = False
+            logger.error(f"Error loading books cache: {e}")
     
     def get_book_by_id(self, book_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -124,44 +174,11 @@ class SQLiteBookService:
             Fields: book_id, title, authors, category, description, 
                     publish_year, publish_month, embedding
         """
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Query by id from points table
-            cursor.execute("SELECT id, point FROM points WHERE id = ?", (book_id,))
-            row = cursor.fetchone()
-            conn.close()
-            
-            if not row:
-                return None
-            
-            # Deserialize point data
-            point_data = pickle.loads(row[1])
-            payload = point_data.payload
-            
-            # Extract fields according to ACTUAL schema
-            book_id = str(point_data.id)
-            publish_year = _parse_publish_year(payload.get('Publish Date (Year)'))
-            publish_month = _parse_publish_month(payload.get('Publish Date (Month)'))
-            # Some datasets store full date in the "(Year)" field; backfill month if possible.
-            if publish_month is None and isinstance(payload.get('Publish Date (Year)'), str):
-                publish_month = _parse_publish_month(payload.get('Publish Date (Year)'))
-
-            return {
-                'book_id': book_id,
-                'title': payload.get('Title', 'Unknown'),
-                'authors': payload.get('Authors', 'Unknown'),  # Comma-separated list
-                'category': payload.get('Category', 'Unknown'),  # Single category
-                'description': payload.get('Description', ''),
-                'publish_year': publish_year,
-                'publish_month': publish_month,
-                'embedding': np.array(point_data.vector) if hasattr(point_data, 'vector') else None
-            }
+        # Ensure cache is loaded
+        self._load_cache()
         
-        except Exception as e:
-            logger.error(f"Error fetching book {book_id} from SQLite: {e}")
-            return None
+        # Lookup by numeric ID
+        return self._books_cache.get(str(book_id))
     
     def get_books_by_ids(self, book_ids: List[str]) -> List[Dict[str, Any]]:
         """

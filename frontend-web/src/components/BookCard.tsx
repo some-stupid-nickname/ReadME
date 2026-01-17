@@ -1,10 +1,11 @@
 /**
- * Book Card Component
+ * Book Card Component with lazy cover loading
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Book, Heart } from 'lucide-react';
 import type { BookDetail } from '@/types';
 import { Button } from './ui/Button';
+import { bookAPI } from '@/services/api';
 
 interface BookCardProps {
   book: BookDetail | {
@@ -28,9 +29,26 @@ export const BookCard: React.FC<BookCardProps> = ({
   compact = false,
 }) => {
   const bookId = 'book_id' in book ? book.book_id : ('id' in book ? (book as any).id : '');
-  const coverUrl = book.cover_url;
+  const initialCoverUrl = book.cover_url;
   const genres = book.genres || [];
   const inLibrary = 'in_library' in book ? book.in_library : false;
+  
+  // Lazy load cover if it's a placeholder
+  const [coverUrl, setCoverUrl] = useState(initialCoverUrl);
+  const isPlaceholder = initialCoverUrl?.includes('placehold.co');
+  
+  useEffect(() => {
+    if (isPlaceholder && bookId) {
+      // Load real cover in background
+      bookAPI.getCover(bookId)
+        .then(url => {
+          if (url && !url.includes('placehold.co')) {
+            setCoverUrl(url);
+          }
+        })
+        .catch(() => {}); // Ignore errors, keep placeholder
+    }
+  }, [bookId, isPlaceholder]);
 
   // Don't render card if bookId is missing (defensive check)
   if (!bookId) {

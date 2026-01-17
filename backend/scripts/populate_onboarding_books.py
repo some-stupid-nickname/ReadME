@@ -1,14 +1,12 @@
 """
-Script to populate onboarding_books table with real book IDs from SQLite.
-
-This script searches for specific books in the SQLite database and updates
-the PostgreSQL onboarding_books table with actual book IDs.
+Script to populate onboarding_books table with curated popular books.
 
 Usage:
     python backend/scripts/populate_onboarding_books.py
 """
 import asyncio
 import sqlite3
+import pickle
 from pathlib import Path
 import sys
 
@@ -19,51 +17,77 @@ sys.path.insert(0, str(backend_dir))
 from database.postgres_service import postgres_db
 
 
-# Books to search for (title keywords, author keywords)
-ONBOARDING_BOOKS = [
-    # Classic (4 books)
-    ("War and Peace", "Tolstoy"),
-    ("1984", "Orwell"),
-    ("Pride and Prejudice", "Austen"),
-    ("Master and Margarita", "Bulgakov"),
-    
-    # Fantasy (4 books)
-    ("Harry Potter", "Rowling"),
-    ("Lord of the Rings", "Tolkien"),
-    ("Hitchhiker", "Adams"),
-    ("Dune", "Herbert"),
-    
-    # Thriller (4 books)
-    ("Girl with the Dragon Tattoo", "Larsson"),
-    ("Murder on the Orient Express", "Christie"),
-    ("Silence of the Lambs", "Harris"),
-    ("Sherlock Holmes", "Doyle"),
-    
-    # Modern (4 books)
-    ("Little Life", "Yanagihara"),
-    ("Three Comrades", "Remarque"),
-    ("Hundred Years of Solitude", "Márquez"),
-    ("Norwegian Wood", "Murakami"),
-]
+# Curated list of famous books by category (using IDs from storage.sqlite - 174k books)
+# Original selection from first version, with verified IDs
+FAMOUS_BOOKS = {
+    'classic': [
+        # Классика
+        (376, "War and Peace", "Leo Tolstoy"),
+        (1, "Animal Farm", "George Orwell"),
+        (63, "Pride and Prejudice", "Jane Austen"),
+        (771, "The Master and Margarita", "Mikhail Bulgakov"),
+    ],
+    'fantasy': [
+        # Фэнтези и Sci-Fi
+        (140, "Harry Potter and the Philosopher's Stone", "J. K. Rowling"),
+        (74, "The Lord of the Rings", "J. R. R. Tolkien"),
+        (1026, "The Hitchhiker's Guide to the Galaxy", "Douglas Adams"),
+        (21, "Children of Dune", "Frank Herbert"),
+    ],
+    'thriller': [
+        # Триллер и Детектив
+        (10502, "The Girl with the Dragon Tattoo", "Stieg Larsson"),
+        (425, "Murder on the Orient Express", "Agatha Christie"),
+        (5214, "The Silence of the Lambs", "Thomas Harris"),
+        (38652, "Mysteries of Sherlock Holmes", "Arthur Conan Doyle"),
+    ],
+    'modern': [
+        # Современная литература
+        (719, "Three Comrades", "Erich Maria Remarque"),
+        (1293, "One Hundred Years of Solitude", "Gabriel García Márquez"),
+        (96131, "Norwegian Wood", "Haruki Murakami"),
+        (78, "The Shining", "Stephen King"),
+    ],
+}
 
 
 async def find_and_populate():
-    """Main function to find books and populate onboarding table."""
+    """Main function to populate onboarding table with curated famous books."""
     
     print("=" * 60)
-    print("Populating Onboarding Books")
+    print("Populating Onboarding Books with Famous Titles")
     print("=" * 60)
     
-    # Connect to databases
-    sqlite_path = backend_dir.parent / "data" / "storage.sqlite"
-    if not sqlite_path.exists():
-        print(f"ERROR: SQLite database not found at {sqlite_path}")
+    # Find SQLite database to verify books exist
+    possible_paths = [
+        backend_dir.parent / "storage.sqlite",
+        backend_dir.parent / "data" / "storage.sqlite",
+        backend_dir / "storage.sqlite",
+    ]
+    sqlite_path = None
+    for p in possible_paths:
+        if p.exists():
+            sqlite_path = p
+            break
+    
+    if not sqlite_path:
+        print(f"ERROR: SQLite database not found in any of: {possible_paths}")
         return
     
     print(f"SQLite database: {sqlite_path}")
     
+    # Verify books exist in SQLite
     sqlite_conn = sqlite3.connect(str(sqlite_path))
     cursor = sqlite_conn.cursor()
+    
+    # Build lookup of all book IDs
+    cursor.execute("SELECT id, point FROM points")
+    existing_ids = set()
+    for row in cursor.fetchall():
+        point_data = pickle.loads(row[1])
+        existing_ids.add(point_data.id)
+    
+    print(f"Loaded {len(existing_ids)} book IDs from SQLite")
     
     await postgres_db.connect()
     print("PostgreSQL connected")
@@ -72,68 +96,33 @@ async def find_and_populate():
     await postgres_db.execute("DELETE FROM onboarding_books")
     print("Cleared existing onboarding books")
     
-    # Search and insert
-    categories = ['classic', 'fantasy', 'thriller', 'modern']
-    category_idx = 0
-    display_order = 1
-    found_count = 0
+    # Insert curated books
+    total_inserted = 0
     
-    for title_part, author_part in ONBOARDING_BOOKS:
-        # Search in SQLite (using LIKE for fuzzy matching)
-        cursor.execute("""
-            SELECT id, point
-            FROM points
-            LIMIT 1000
-        """)
+    for category, books in FAMOUS_BOOKS.items():
+        print(f"\n{category.upper()}:")
+        display_order = 1
         
-        rows = cursor.fetchall()
-        
-        book_found = False
-        for row in rows:
-            try:
-                import pickle
-                point_data = pickle.loads(row[1])
-                payload = point_data.payload
-                
-                title = payload.get('Title', '')
-                authors = payload.get('Authors', '')
-                
-                # Check if title and author match
-                if (title_part.lower() in title.lower() and 
-                    author_part.lower() in authors.lower()):
-                    
-                    book_id = point_data.id
-                    first_author = authors.split(',')[0].strip()
-                    category = categories[category_idx // 4]
-                    
-                    # Insert into PostgreSQL
-                    await postgres_db.execute("""
-                        INSERT INTO onboarding_books 
-                        (book_id, category, display_order, title, author)
-                        VALUES ($1, $2, $3, $4, $5)
-                    """, book_id, category, display_order, title, first_author)
-                    
-                    print(f"✓ [{category}] {title} by {first_author}")
-                    
-                    book_found = True
-                    found_count += 1
-                    display_order += 1
-                    if display_order > 4:
-                        display_order = 1
-                        category_idx += 1
-                    break
-            
-            except Exception as e:
+        for book_id, title, author in books:
+            if book_id not in existing_ids:
+                print(f"  ✗ [{book_id}] {title} — NOT FOUND")
                 continue
-        
-        if not book_found:
-            print(f"✗ NOT FOUND: {title_part} by {author_part}")
+            
+            await postgres_db.execute("""
+                INSERT INTO onboarding_books 
+                (book_id, category, display_order, title, author)
+                VALUES ($1, $2, $3, $4, $5)
+            """, str(book_id), category, display_order, title, author)
+            
+            print(f"  ✓ [{book_id}] {title}")
+            display_order += 1
+            total_inserted += 1
     
     sqlite_conn.close()
     await postgres_db.disconnect()
     
-    print("=" * 60)
-    print(f"Completed: {found_count}/{len(ONBOARDING_BOOKS)} books found")
+    print("\n" + "=" * 60)
+    print(f"Completed: {total_inserted} famous books inserted")
     print("=" * 60)
 
 

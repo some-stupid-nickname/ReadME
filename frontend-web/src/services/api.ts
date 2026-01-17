@@ -11,6 +11,7 @@ import type {
   OnboardingComplete,
   SearchResponse,
   PersonalizedSearchResponse,
+  ClarificationResponse,
   LibraryResponse,
   ReviewRequest,
   ReviewResponse,
@@ -102,6 +103,19 @@ export const searchAPI = {
     const response = await api.post<PersonalizedSearchResponse>('/api/search/personalized', { query });
     return response.data;
   },
+
+  clarifyQuery: async (query: string): Promise<ClarificationResponse> => {
+    const response = await api.post<ClarificationResponse>('/api/search/clarify', { query });
+    return response.data;
+  },
+
+  enrichedSearch: async (originalQuery: string, userContext: string): Promise<SearchResponse> => {
+    const response = await api.post<SearchResponse>('/api/search/enriched', {
+      original_query: originalQuery,
+      user_context: userContext,
+    });
+    return response.data;
+  },
 };
 
 // ============================================================
@@ -153,6 +167,11 @@ export const bookAPI = {
   getDetails: async (bookId: string): Promise<BookDetail> => {
     const response = await api.get<BookDetail>(`/api/books/${bookId}`);
     return response.data;
+  },
+  
+  getCover: async (bookId: string): Promise<string> => {
+    const response = await api.get<{ cover_url: string }>(`/api/books/${bookId}/cover`);
+    return response.data.cover_url;
   },
 };
 

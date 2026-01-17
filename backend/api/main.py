@@ -46,6 +46,11 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Failed to pre-initialize RAG assistant: {e}")
             logger.warning("RAG will initialize on first request instead")
         
+        # Pre-load SQLite book cache to speed up library/book requests
+        logger.info("Pre-loading SQLite book cache...")
+        sqlite_book_service._load_cache()
+        logger.info("SQLite cache ready")
+        
         # Initialize background jobs scheduler
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler

@@ -143,9 +143,9 @@ class BookDetailResponse(BaseModel):
     title: str
     author: str  # First author for display
     authors: str  # Full comma-separated list from DB
-    category: str  # Raw category from DB
-    genres: List[str]  # Parsed array from category
-    description: str
+    category: Optional[str] = None  # Raw category from DB (can be None)
+    genres: List[str] = []  # Parsed array from category
+    description: Optional[str] = None  # Can be None
     publish_year: Optional[int] = None
     publish_month: Optional[int] = None
     cover_url: Optional[str] = None

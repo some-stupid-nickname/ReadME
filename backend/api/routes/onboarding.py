@@ -1,10 +1,12 @@
 """Onboarding API endpoints"""
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from typing import List
 from loguru import logger
 
 from models.schemas import OnboardingBook, OnboardingComplete
 from api.dependencies import get_postgres_db, get_current_user
+from services.background_jobs import recalculate_user_preference_now
+from services.sqlite_helper import sqlite_book_service
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
 
@@ -53,6 +55,7 @@ async def get_onboarding_books(
 @router.post("/complete", status_code=status.HTTP_200_OK)
 async def complete_onboarding(
     completion_data: OnboardingComplete,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db = Depends(get_postgres_db)
 ):
@@ -107,6 +110,15 @@ async def complete_onboarding(
         
         # Mark onboarding as completed
         await db.complete_onboarding(user_id)
+        
+        # Immediately recalculate preference vector for instant personalization
+        # Run in background to not delay response
+        background_tasks.add_task(
+            recalculate_user_preference_now,
+            db,
+            sqlite_book_service,
+            user_id
+        )
         
         # Get updated library count
         library_count = await db.get_library_count(user_id)

@@ -183,7 +183,10 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(os.path.dirname(script_dir))
 
+    # Check both locations for the Excel file
     excel_path = os.path.join(project_root, "data", "processed", "book_data_prepared.xlsx")
+    if not os.path.exists(excel_path):
+        excel_path = os.path.join(project_root, "book_data_prepared.xlsx")
     
     if args.output:
         output_db_path = args.output if os.path.isabs(args.output) else os.path.join(project_root, args.output)

@@ -1,11 +1,12 @@
 """Library management API endpoints"""
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, HTTPException, status, Depends, Query, BackgroundTasks
 from typing import List, Optional
 from loguru import logger
 
 from models.schemas import BookDetailResponse, LibraryAddRequest, LibraryResponse
 from api.dependencies import get_postgres_db, get_current_user
 from services.sqlite_helper import sqlite_book_service
+from services.background_jobs import recalculate_user_preference_now
 
 router = APIRouter(prefix="/library", tags=["Library"])
 
@@ -140,6 +141,7 @@ async def get_library(
 async def add_to_library(
     book_id: str,
     request: LibraryAddRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db = Depends(get_postgres_db)
 ):
@@ -185,6 +187,14 @@ async def add_to_library(
         )
         
         logger.info(f"User {user_id} added book {book_id} to library")
+        
+        # Recalculate preference vector in background for instant personalization
+        background_tasks.add_task(
+            recalculate_user_preference_now,
+            db,
+            sqlite_book_service,
+            user_id
+        )
         
         return {
             "success": True,

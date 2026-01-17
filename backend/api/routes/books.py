@@ -155,3 +155,39 @@ async def get_book_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch book details"
         )
+
+
+@router.get("/{book_id}/cover")
+async def get_book_cover(
+    book_id: str,
+    db = Depends(get_postgres_db),
+    cover_service: CoverFetchService = Depends(get_cover_fetch_service)
+):
+    """
+    Get book cover URL.
+    
+    Returns cached cover instantly, or placeholder + background fetch.
+    """
+    import asyncio
+    
+    # Check cache first - instant response
+    cover_url = await db.get_cover_url(book_id)
+    
+    if cover_url:
+        return {"cover_url": cover_url}
+    
+    # Not cached - return placeholder immediately, fetch in background
+    book = sqlite_book_service.get_book_by_id(book_id)
+    if not book:
+        return {"cover_url": f"https://placehold.co/128x192/1a1a2e/eee?text=Book"}
+    
+    # Generate placeholder
+    title_short = book['title'][:12].replace(' ', '+')
+    placeholder = f"https://placehold.co/128x192/1a1a2e/eee?text={title_short}"
+    
+    # Fetch real cover in background (for next request)
+    asyncio.create_task(
+        cover_service.get_cover_url(book_id, book['title'], book['authors'])
+    )
+    
+    return {"cover_url": placeholder}

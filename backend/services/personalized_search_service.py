@@ -69,9 +69,15 @@ class PersonalizedSearchService:
             context_books = None
             logger.info(f"No personalization for user {user_id} (insufficient data or low similarity)")
         
-        # Step 3: Call EXISTING RAG (no modifications to BookRAGAssistant)
+        # Step 3: Get user's library book IDs to exclude from recommendations
+        library_book_ids = await self.pg_db.get_user_library_book_ids(user_id)
+        
+        # Step 4: Call RAG with exclusion list (filter happens BEFORE LLM sees books)
         # Returns tuple: (response_text, list of (Book, score))
-        rag_response_text, rag_books = await self.rag.ask(enhanced_query)
+        rag_response_text, rag_books = await self.rag.ask(
+            enhanced_query, 
+            exclude_book_ids=library_book_ids
+        )
         
         # Transform rag_books to BookInfo list with cover URLs (fetch in parallel)
         import asyncio
@@ -92,30 +98,19 @@ class PersonalizedSearchService:
             else:
                 genres = []
             
-            # Get cover URL from cache
+            # Get cover URL from cache only - don't wait for external APIs
             cover_url = await self.pg_db.get_cover_url(str(book_obj.id))
             
-            # If not cached and service available, fetch with timeout
-            # Increased timeout to allow full fallback strategy (Google Books -> DuckDuckGo -> Placeholder)
-            if cover_url is None and cover_service:
-                try:
-                    cover_url = await asyncio.wait_for(
-                        cover_service.get_cover_url(str(book_obj.id), book_obj.title, str(authors)),
-                        timeout=10.0  # Increased to allow full fallback chain
+            # If not in cache, use placeholder immediately and fetch in background
+            if cover_url is None:
+                # Generate placeholder for instant response
+                cover_url = f"https://placehold.co/128x192/1a1a2e/eee?text={book_obj.title[:10].replace(' ', '+')}"
+                
+                # Schedule background fetch for next time (don't await)
+                if cover_service:
+                    asyncio.create_task(
+                        cover_service.get_cover_url(str(book_obj.id), book_obj.title, str(authors))
                     )
-                except asyncio.TimeoutError:
-                    # Even on timeout, get_cover_url should return placeholder, but log it
-                    logger.warning(f"Cover fetch timeout for {book_obj.title}, using placeholder")
-                    # Try one more time without timeout to get at least placeholder
-                    try:
-                        cover_url = await cover_service.get_cover_url(str(book_obj.id), book_obj.title, str(authors))
-                    except Exception as e2:
-                        logger.error(f"Cover fetch completely failed for {book_obj.title}: {e2}")
-                        cover_url = None
-                except Exception as e:
-                    logger.warning(f"Cover fetch failed for {book_obj.title}: {e}")
-                    # get_cover_url should always return a URL, but if it doesn't, set to None
-                    cover_url = None
             
             return BookInfo(
                 id=str(book_obj.id),
@@ -131,8 +126,8 @@ class PersonalizedSearchService:
         book_tasks = [transform_book(book, score) for book, score in rag_books]
         books_list = await asyncio.gather(*book_tasks)
         
-        # Step 4: Post-filter - remove books already in library
-        filtered_books = await self._filter_library_books(books_list, user_id)
+        # Note: filtering already happened in RAG before LLM saw the books
+        filtered_books = books_list
         
         # Step 5: Log recommendation
         await self._log_recommendation(
@@ -182,7 +177,9 @@ class PersonalizedSearchService:
         similarity = self._cosine_similarity(query_embedding, preference_vector)
         
         # Check threshold
+        logger.debug(f"User {user_id} query similarity: {similarity:.3f} (threshold: {self.SIMILARITY_THRESHOLD})")
         if similarity < self.SIMILARITY_THRESHOLD:
+            logger.info(f"Similarity {similarity:.3f} below threshold {self.SIMILARITY_THRESHOLD}, skipping personalization")
             return None  # Query not related to user preferences
         
         # Fetch context books (top-rated from library)

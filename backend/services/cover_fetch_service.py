@@ -39,7 +39,13 @@ class CoverFetchService:
         self.pg_db = postgres_db
         self.api_key = api_key
         self._last_request_time = 0
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
+    
+    def _get_lock(self) -> asyncio.Lock:
+        """Lazily create lock in the correct event loop context"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
     
     async def get_cover_url(
         self,
@@ -128,7 +134,7 @@ class CoverFetchService:
         """
         
         # Rate limiting
-        async with self._lock:
+        async with self._get_lock():
             now = asyncio.get_event_loop().time()
             time_since_last = now - self._last_request_time
             
@@ -214,9 +220,9 @@ class CoverFetchService:
                     ddgs = DDGS()
                     
                     logger.debug(f"Searching images for '{title}'...")
-                    # Search images with current API
+                    # Search images with new ddgs API (v9+)
                     results = ddgs.images(
-                        keywords=query,
+                        query,  # positional argument in new API
                         region='wt-wt',  # Worldwide
                         safesearch='off',
                         max_results=5
@@ -347,6 +353,18 @@ class CoverFetchService:
         
         for i, book in enumerate(books, 1):
             try:
+                # Check cache first - no delay needed for cached items
+                cached = await self.pg_db.get_cover_url(book['book_id'])
+                if cached:
+                    success_count += 1
+                    if 'google' in cached or 'googleapis' in cached:
+                        google_count += 1
+                    elif 'placehold' in cached:
+                        placeholder_count += 1
+                    else:
+                        ddg_count += 1
+                    continue  # Skip to next book, no delay needed
+                
                 cover_url = await self.get_cover_url(
                     book_id=book['book_id'],
                     title=book['title'],
@@ -356,7 +374,7 @@ class CoverFetchService:
                 # Count source type (for statistics)
                 if 'google' in cover_url or 'googleapis' in cover_url:
                     google_count += 1
-                elif 'dicebear' in cover_url or 'boringavatars' in cover_url:
+                elif 'placehold' in cover_url:
                     placeholder_count += 1
                 else:
                     ddg_count += 1
@@ -370,7 +388,7 @@ class CoverFetchService:
                         f"(Google: {google_count}, DDG: {ddg_count}, Placeholder: {placeholder_count})"
                     )
                 
-                # Delay between requests
+                # Delay only for external API calls
                 await asyncio.sleep(self.RATE_LIMIT_DELAY)
             
             except Exception as e:
