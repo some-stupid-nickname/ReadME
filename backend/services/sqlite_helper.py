@@ -4,6 +4,93 @@ import pickle
 from typing import Optional, Dict, Any, List
 import numpy as np
 from loguru import logger
+import re
+
+
+def _parse_publish_year(value: Any) -> Optional[int]:
+    """Parse publish year from various formats (int, 'YYYY', 'YYYY-MM-DD', etc.)."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        try:
+            return int(value)
+        except Exception:
+            return None
+    if isinstance(value, str):
+        v = value.strip()
+        if not v or v.lower() == "unknown":
+            return None
+        # Accept 'YYYY-MM-DD' or any string starting with a 4-digit year
+        m = re.match(r"^(\d{4})", v)
+        if m:
+            try:
+                return int(m.group(1))
+            except Exception:
+                return None
+        try:
+            return int(v)
+        except Exception:
+            return None
+    return None
+
+
+_MONTHS = {
+    "jan": 1, "january": 1,
+    "feb": 2, "february": 2,
+    "mar": 3, "march": 3,
+    "apr": 4, "april": 4,
+    "may": 5,
+    "jun": 6, "june": 6,
+    "jul": 7, "july": 7,
+    "aug": 8, "august": 8,
+    "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10,
+    "nov": 11, "november": 11,
+    "dec": 12, "december": 12,
+}
+
+
+def _parse_publish_month(value: Any) -> Optional[int]:
+    """Parse publish month from various formats (int, '10', 'October', 'YYYY-MM-DD', etc.)."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if 1 <= value <= 12 else None
+    if isinstance(value, float):
+        try:
+            i = int(value)
+            return i if 1 <= i <= 12 else None
+        except Exception:
+            return None
+    if isinstance(value, str):
+        v = value.strip()
+        if not v or v.lower() == "unknown":
+            return None
+        # 'YYYY-MM-DD'
+        m = re.match(r"^\d{4}[-/](\d{1,2})[-/]\d{1,2}", v)
+        if m:
+            try:
+                i = int(m.group(1))
+                return i if 1 <= i <= 12 else None
+            except Exception:
+                return None
+        # numeric month
+        if v.isdigit():
+            try:
+                i = int(v)
+                return i if 1 <= i <= 12 else None
+            except Exception:
+                return None
+        # month name
+        key = v.lower()
+        return _MONTHS.get(key) or _MONTHS.get(key[:3])
+    return None
 
 
 class SQLiteBookService:
@@ -54,14 +141,21 @@ class SQLiteBookService:
             payload = point_data.payload
             
             # Extract fields according to ACTUAL schema
+            book_id = str(point_data.id)
+            publish_year = _parse_publish_year(payload.get('Publish Date (Year)'))
+            publish_month = _parse_publish_month(payload.get('Publish Date (Month)'))
+            # Some datasets store full date in the "(Year)" field; backfill month if possible.
+            if publish_month is None and isinstance(payload.get('Publish Date (Year)'), str):
+                publish_month = _parse_publish_month(payload.get('Publish Date (Year)'))
+
             return {
-                'book_id': point_data.id,
+                'book_id': book_id,
                 'title': payload.get('Title', 'Unknown'),
                 'authors': payload.get('Authors', 'Unknown'),  # Comma-separated list
                 'category': payload.get('Category', 'Unknown'),  # Single category
                 'description': payload.get('Description', ''),
-                'publish_year': payload.get('Publish Date (Year)'),
-                'publish_month': payload.get('Publish Date (Month)'),
+                'publish_year': publish_year,
+                'publish_month': publish_month,
                 'embedding': np.array(point_data.vector) if hasattr(point_data, 'vector') else None
             }
         

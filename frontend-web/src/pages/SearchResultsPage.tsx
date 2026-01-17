@@ -2,7 +2,7 @@
  * Search Results Page
  */
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useNavigationType } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { BookCard } from '@/components/BookCard';
 import { searchAPI, libraryAPI } from '@/services/api';
@@ -19,15 +19,35 @@ export const SearchResultsPage: React.FC = () => {
   
   const { refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const navigationType = useNavigationType();
   const toast = useToast();
 
   useEffect(() => {
     if (query) {
+      const cacheKey = `searchResults:${query}`;
+
+      // If user returned via browser back (POP), reuse cached results and avoid re-searching.
+      if (navigationType === 'POP') {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached) as PersonalizedSearchResponse;
+            setResults(parsed);
+            setLoading(false);
+            // Save query to localStorage for back navigation (detail page fallback)
+            localStorage.setItem('lastSearchQuery', query);
+            return;
+          } catch {
+            // ignore cache parse errors and fall back to live search
+          }
+        }
+      }
+
       performSearch();
       // Save query to localStorage for back navigation
       localStorage.setItem('lastSearchQuery', query);
     }
-  }, [query]);
+  }, [query, navigationType]);
 
   const performSearch = async () => {
     setLoading(true);
@@ -35,6 +55,11 @@ export const SearchResultsPage: React.FC = () => {
       // Use personalized search if authenticated
       const data = await searchAPI.personalizedSearch(query);
       setResults(data);
+      try {
+        sessionStorage.setItem(`searchResults:${query}`, JSON.stringify(data));
+      } catch {
+        // ignore storage errors (e.g., quota)
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Search failed');
     } finally {

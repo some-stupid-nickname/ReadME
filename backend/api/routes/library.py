@@ -35,9 +35,10 @@ def transform_book_to_detail_response(
         genres = []
     
     # Build response
+    book_id = str(book_data['book_id'])
     response = BookDetailResponse(
-        book_id=book_data['book_id'],
-        id=book_data['book_id'],  # Add id field for frontend compatibility
+        book_id=book_id,
+        id=book_id,  # Add id field for frontend compatibility
         title=book_data['title'],
         author=first_author,
         authors=book_data['authors'],
