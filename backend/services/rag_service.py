@@ -114,15 +114,17 @@ consider the topic of previous queries, but don't duplicate book titles already 
 Current query: "{query}"
 
 Rules:
-1. Identify the TOPIC of the query (not country, not language - the topic itself)
-2. If the query is like "more", "others", "similar" - use the topic from previous queries
-3. Return 5-10 English words for searching books on this topic
-4. Only words separated by spaces, no explanations
+1. CRITICAL: If the query mentions a SPECIFIC book title or series name (like "Harry Potter", "Lord of the Rings", "Game of Thrones") - ALWAYS include the exact English title!
+2. If the query mentions an author name - include the author's name
+3. Add related keywords (genre, themes) but KEEP the specific title/name
+4. Translate non-English book titles/names to their English equivalents
+5. Return 5-10 English words for searching, no explanations
 
 Examples:
-- "dogs" → dogs pets animals training care veterinary canine
-- "more about dogs" → dogs pets animals breeds puppy canine training
-- "mysteries" → mystery detective crime thriller fiction investigation
+- "Гарри Поттер" → Harry Potter Rowling wizard magic Hogwarts fantasy
+- "книги про собак" → dogs pets animals training care veterinary canine
+- "что-то похожее на Властелина Колец" → Lord of the Rings Tolkien fantasy epic adventure
+- "детективы" → mystery detective crime thriller fiction investigation
 
 Your answer (only English keywords):"""
                     }],
