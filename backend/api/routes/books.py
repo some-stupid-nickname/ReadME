@@ -5,8 +5,9 @@ from loguru import logger
 import os
 
 from models.schemas import BookDetailResponse
-from api.dependencies import get_postgres_db, get_current_user_optional
+from api.dependencies import get_postgres_db, get_current_user_optional, get_cover_fetch_service
 from services.sqlite_helper import sqlite_book_service
+from services.cover_fetch_service import CoverFetchService
 
 router = APIRouter(prefix="/books", tags=["Books"])
 
@@ -64,7 +65,8 @@ def transform_book_to_detail_response(
 async def get_book_details(
     book_id: str,
     current_user: Optional[dict] = Depends(get_current_user_optional),
-    db = Depends(get_postgres_db)
+    db = Depends(get_postgres_db),
+    cover_service: CoverFetchService = Depends(get_cover_fetch_service)
 ):
     """
     Get detailed information about a book.
@@ -101,9 +103,12 @@ async def get_book_details(
         cover_url = await db.get_cover_url(book_id)
         
         if not cover_url:
-            logger.debug(f"No cached cover for book {book_id}, will fetch in background")
-            # Optionally trigger background fetch
-            # For now, just return None and let frontend handle placeholder
+            logger.debug(f"No cached cover for book {book_id}, triggering background fetch")
+            # Trigger background fetch
+            import asyncio
+            asyncio.create_task(
+                cover_service.get_cover_url(book_id, book['title'], book['authors'])
+            )
         
         # Get user context if authenticated
         user_context = None

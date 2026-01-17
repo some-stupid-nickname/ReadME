@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     # Database paths
     books_db_path: Optional[str] = None
     
+    # PostgreSQL settings
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_user: str = "rag_user"
+    postgres_password: str = "rag_password"
+    postgres_db: str = "rag_db"
+    
     # API settings
     api_host: str = "0.0.0.0"
     api_port: int = 8000
@@ -61,26 +68,36 @@ def get_books_db_path() -> str:
     if settings.books_db_path:
         return settings.books_db_path
     
-    # Try to find books.sqlite in common locations
+    # Try to find books.sqlite or storage.sqlite in common locations
     project_root = Path(__file__).parent.parent.parent
     
-    # Check in frontend/ directory (where console_interface.py is)
+    # 1. Check in data/ directory (primary location for storage.sqlite)
+    data_storage_path = project_root / "data" / "storage.sqlite"
+    if data_storage_path.exists():
+        return str(data_storage_path)
+    
+    # 2. Check in data/ directory for books.sqlite
+    data_books_path = project_root / "data" / "books.sqlite"
+    if data_books_path.exists():
+        return str(data_books_path)
+    
+    # 3. Check in backend/ directory
+    backend_path = project_root / "backend" / "books.sqlite"
+    if backend_path.exists():
+        return str(backend_path)
+        
+    # 4. Check in frontend/ directory (where console_interface.py is)
     frontend_path = project_root / "frontend" / "books.sqlite"
     if frontend_path.exists():
         return str(frontend_path)
     
-    # Check in backend/ directory
-    backend_path = project_root / "backend" / "books.sqlite"
-    if backend_path.exists():
-        return str(backend_path)
-    
-    # Check in project root
+    # 5. Check in project root
     root_path = project_root / "books.sqlite"
     if root_path.exists():
         return str(root_path)
     
     # Default fallback
-    return str(frontend_path)
+    return str(data_storage_path)
 
 
 # Global settings instance

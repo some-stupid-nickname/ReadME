@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+from typing import Optional, List
 from models.schemas import (
     SearchRequest, SearchResponse, BookInfo,
     ClarificationRequest, ClarificationResponse,
@@ -8,13 +9,22 @@ from services.rag_service import BookRAGAssistant
 from services.query_enrichment_service import QueryEnrichmentService
 from services.personalized_search_service import PersonalizedSearchService
 from services.sqlite_helper import sqlite_book_service
-from api.dependencies import get_rag_assistant, get_query_enrichment_service, get_postgres_db, get_current_user
+from api.dependencies import (
+    get_rag_assistant, get_query_enrichment_service, 
+    get_postgres_db, get_current_user, get_cover_fetch_service
+)
+from services.cover_fetch_service import CoverFetchService
 from models.book import Book
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
-async def book_to_book_info(book: Book, score: float, db) -> BookInfo:
+async def book_to_book_info(
+    book: Book, 
+    score: float, 
+    db, 
+    cover_service: Optional[CoverFetchService] = None
+) -> BookInfo:
     """Convert Book model to BookInfo schema with cover URL"""
     # Extract category as genres list
     genres = []
@@ -26,6 +36,16 @@ async def book_to_book_info(book: Book, score: float, db) -> BookInfo:
     
     # Get cover URL from cache
     cover_url = await db.get_cover_url(str(book.id))
+    
+    # If not in cache and service is available, trigger background fetch
+    if cover_url is None and cover_service:
+        import asyncio
+        from loguru import logger
+        logger.debug(f"Triggering background cover fetch for: {book.title}")
+        # Use task to not block search response
+        asyncio.create_task(
+            cover_service.get_cover_url(str(book.id), book.title, book.authors)
+        )
 
     return BookInfo(
         id=str(book.id),
@@ -42,7 +62,8 @@ async def book_to_book_info(book: Book, score: float, db) -> BookInfo:
 async def search_books(
     request: SearchRequest,
     assistant: BookRAGAssistant = Depends(get_rag_assistant),
-    db = Depends(get_postgres_db)
+    db = Depends(get_postgres_db),
+    cover_service: CoverFetchService = Depends(get_cover_fetch_service)
 ) -> SearchResponse:
     """
     Анонимный поиск книг (БЕЗ сохранения в историю)
@@ -66,7 +87,7 @@ async def search_books(
         # Convert books to API format with cover URLs
         books = []
         for book, score in search_results:
-            book_info = await book_to_book_info(book, score, db)
+            book_info = await book_to_book_info(book, score, db, cover_service)
             books.append(book_info)
 
         return SearchResponse(
@@ -133,7 +154,8 @@ async def enriched_search(
     request: EnrichedSearchRequest,
     assistant: BookRAGAssistant = Depends(get_rag_assistant),
     enrichment_service: QueryEnrichmentService = Depends(get_query_enrichment_service),
-    db = Depends(get_postgres_db)
+    db = Depends(get_postgres_db),
+    cover_service: CoverFetchService = Depends(get_cover_fetch_service)
 ) -> SearchResponse:
     """
     Search with enriched query (original query + user's additional context)
@@ -171,7 +193,7 @@ async def enriched_search(
         # Convert books to API format with cover URLs
         books = []
         for book, score in search_results:
-            book_info = await book_to_book_info(book, score, db)
+            book_info = await book_to_book_info(book, score, db, cover_service)
             books.append(book_info)
 
         return SearchResponse(

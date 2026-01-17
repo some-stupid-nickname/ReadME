@@ -7,6 +7,7 @@ from services.rag_service import BookRAGAssistant
 from services.search_service import VectorSearchEngine
 from services.database_service import BookDatabase
 from services.query_enrichment_service import QueryEnrichmentService
+from services.cover_fetch_service import CoverFetchService
 from database.postgres_service import postgres_db
 from core.config import settings, get_books_db_path
 from core.security import decode_access_token
@@ -18,6 +19,7 @@ security = HTTPBearer()
 # Global instances - initialize once at module level (not on first request)
 _rag_assistant_instance = None
 _query_enrichment_instance = None
+_cover_fetch_instance = None
 
 
 def get_rag_assistant() -> BookRAGAssistant:
@@ -64,16 +66,27 @@ def get_query_enrichment_service() -> QueryEnrichmentService:
     return _query_enrichment_instance
 
 
-# ============================================================
-# NEW DEPENDENCIES - Authentication and Database
-# ============================================================
-
 def get_postgres_db():
     """
     Get PostgreSQL database instance.
     This is the global instance, already connected on app startup.
     """
     return postgres_db
+
+
+def get_cover_fetch_service(db=Depends(get_postgres_db)) -> CoverFetchService:
+    """
+    Get or create cover fetch service instance.
+    """
+    global _cover_fetch_instance
+    
+    if _cover_fetch_instance is None:
+        _cover_fetch_instance = CoverFetchService(
+            postgres_db=db,
+            api_key=settings.google_books_api_key
+        )
+    
+    return _cover_fetch_instance
 
 
 async def get_current_user(

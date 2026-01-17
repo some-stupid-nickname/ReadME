@@ -5,6 +5,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import os
 from loguru import logger
+from core.config import settings
 
 
 class PostgresService:
@@ -16,11 +17,11 @@ class PostgresService:
     def __init__(self):
         self.pool: Optional[asyncpg.Pool] = None
         self._connection_params = {
-            'host': os.getenv('POSTGRES_HOST', 'localhost'),
-            'port': int(os.getenv('POSTGRES_PORT', '5432')),
-            'database': os.getenv('POSTGRES_DB', 'rag_books'),
-            'user': os.getenv('POSTGRES_USER', 'rag_user'),
-            'password': os.getenv('POSTGRES_PASSWORD', ''),
+            'host': settings.postgres_host,
+            'port': settings.postgres_port,
+            'database': settings.postgres_db,
+            'user': settings.postgres_user,
+            'password': settings.postgres_password,
         }
     
     async def connect(self):
