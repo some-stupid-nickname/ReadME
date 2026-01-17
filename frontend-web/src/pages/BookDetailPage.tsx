@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Book, Heart, Star } from 'lucide-react';
+import { Book, Heart } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
@@ -90,7 +90,17 @@ export const BookDetailPage: React.FC = () => {
         <Header />
         <div className="text-center py-20">
           <p className="text-gray-600">Book not found</p>
-          <Button onClick={() => navigate('/welcome')} className="mt-4">
+          <Button 
+            onClick={() => {
+              const lastQuery = localStorage.getItem('lastSearchQuery');
+              if (lastQuery) {
+                navigate(`/search?q=${encodeURIComponent(lastQuery)}`);
+              } else {
+                navigate('/welcome');
+              }
+            }} 
+            className="mt-4"
+          >
             Back to Search
           </Button>
         </div>

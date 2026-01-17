@@ -83,7 +83,7 @@ IMPORTANT RULES:
         self.query_history = []
         self.used_phrases = []
 
-    def _enhance_query(self, query: str) -> str:
+    async def _enhance_query(self, query: str) -> str:
         """Enhance query with English keywords for search"""
 
         context_info = ""
@@ -96,7 +96,7 @@ If the current query is related to previous ones (words like "more", "something 
 consider the topic of previous queries, but don't duplicate book titles already recommended.
 """
         try:
-            response = self.client.chat.complete(
+            response = await self.client.chat.complete_async(
                 model=self.model,
                 messages=[{
                     "role": "user",
@@ -123,7 +123,9 @@ Your answer (only English keywords):"""
             keywords = response.choices[0].message.content.strip()
             keywords = keywords.replace('"', '').replace("'", "").replace("-", " ")
             return keywords
-        except Exception:
+        except Exception as e:
+            from loguru import logger
+            logger.error(f"Error enhancing query with LLM: {e}")
             return query
 
     def _build_context(self, books: List[tuple]) -> str:
@@ -138,7 +140,7 @@ Your answer (only English keywords):"""
 
         return "\n".join(context_parts)
 
-    def ask(self, user_query: str, top_k: int = 10, category_filter: str = None) -> tuple[str, List[tuple]]:
+    async def ask(self, user_query: str, top_k: int = 10, category_filter: str = None) -> tuple[str, List[tuple]]:
         """
         Ask the assistant a question
         
@@ -151,7 +153,7 @@ Your answer (only English keywords):"""
         if len(self.query_history) > 3:
             self.query_history = self.query_history[-3:]
 
-        enhanced_query = self._enhance_query(user_query)
+        enhanced_query = await self._enhance_query(user_query)
 
         # Search 
         search_results = self.search_engine.search(
@@ -179,20 +181,29 @@ Come up with new phrasings"""
 User's question: {user_query}"""
 
         # Query Mistral
-        messages = [
-            {"role": "system", "content": self.SYSTEM_PROMPT},
-            *self.conversation_history,
-            {"role": "user", "content": augmented_query}
-        ]
+        try:
+            messages = [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                *self.conversation_history,
+                {"role": "user", "content": augmented_query}
+            ]
 
-        response = self.client.chat.complete(
-            model=self.model,
-            messages=messages,
-            temperature=0.85,  
-            max_tokens=1024
-        )
+            response = await self.client.chat.complete_async(
+                model=self.model,
+                messages=messages,
+                temperature=0.85,  
+                max_tokens=1024
+            )
 
-        assistant_response = response.choices[0].message.content
+            assistant_response = response.choices[0].message.content
+            
+            # Clean response from unwanted characters sometimes added by LLM
+            assistant_response = assistant_response.strip().strip('"').strip("'")
+            
+        except Exception as e:
+            from loguru import logger
+            logger.error(f"Error calling Mistral API: {e}")
+            assistant_response = "I'm sorry, I'm having a bit of trouble connecting to my library records right now. Could you please try again in a moment?"
 
         self._extract_used_phrases(assistant_response)
 

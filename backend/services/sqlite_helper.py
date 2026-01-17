@@ -12,8 +12,21 @@ class SQLiteBookService:
     READ-ONLY operations - never writes to SQLite.
     """
     
-    def __init__(self, db_path: str = "data/storage.sqlite"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path:
+            self.db_path = db_path
+        else:
+            from core.config import get_books_db_path
+            self.db_path = get_books_db_path()
+        self._encoder = None
+    
+    def _get_encoder(self):
+        """Lazy load and cache the encoder"""
+        if self._encoder is None:
+            from sentence_transformers import SentenceTransformer
+            # Use same model as vector search, force CPU in Docker
+            self._encoder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+        return self._encoder
     
     def get_book_by_id(self, book_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -92,10 +105,7 @@ class SQLiteBookService:
             numpy array (384,)
         """
         try:
-            from sentence_transformers import SentenceTransformer
-            
-            # Use same model as vector search
-            encoder = SentenceTransformer("all-MiniLM-L6-v2")
+            encoder = self._get_encoder()
             embedding = encoder.encode([text])[0]
             
             # Normalize to unit vector
@@ -104,6 +114,7 @@ class SQLiteBookService:
             return embedding
         
         except Exception as e:
+            from loguru import logger
             logger.error(f"Error generating embedding: {e}")
             # Return zero vector as fallback
             return np.zeros(384, dtype=np.float32)

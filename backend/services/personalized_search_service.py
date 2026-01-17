@@ -69,9 +69,9 @@ class PersonalizedSearchService:
         
         # Step 3: Call EXISTING RAG (no modifications to BookRAGAssistant)
         # Returns tuple: (response_text, list of (Book, score))
-        rag_response_text, rag_books = self.rag.ask(enhanced_query)
+        rag_response_text, rag_books = await self.rag.ask(enhanced_query)
         
-        # Transform rag_books to BookInfo list
+        # Transform rag_books to BookInfo list with cover URLs
         books_list = []
         for book_obj, score in rag_books:
             # Extract authors - handle both string and list
@@ -88,12 +88,16 @@ class PersonalizedSearchService:
             else:
                 genres = []
             
+            # Get cover URL from cache (don't fetch - too slow for search results)
+            cover_url = await self.pg_db.get_cover_url(str(book_obj.id))
+            
             books_list.append(BookInfo(
-                id=book_obj.id,
+                id=str(book_obj.id),
                 title=book_obj.title,
                 author=author_display,
                 genres=genres,
                 description=book_obj.description if hasattr(book_obj, 'description') else "",
+                cover_url=cover_url,
                 source_link=None
             ))
         

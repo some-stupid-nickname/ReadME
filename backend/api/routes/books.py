@@ -7,7 +7,6 @@ import os
 from models.schemas import BookDetailResponse
 from api.dependencies import get_postgres_db, get_current_user_optional
 from services.sqlite_helper import sqlite_book_service
-from services.cover_fetch_service import CoverFetchService
 
 router = APIRouter(prefix="/books", tags=["Books"])
 
@@ -81,26 +80,30 @@ async def get_book_details(
         Detailed book information with cover image
     """
     
+    logger.info(f"Fetching details for book_id: {book_id}")
+    
     # Get book from SQLite
     book = sqlite_book_service.get_book_by_id(book_id)
     if not book:
+        logger.warning(f"Book {book_id} not found in SQLite database")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Book {book_id} not found"
         )
     
+    logger.debug(f"Found book: {book['title']} by {book['authors']}")
+    
     try:
-        # Get cover URL (from cache or fetch)
-        cover_service = CoverFetchService(
-            postgres_db=db,
-            api_key=os.getenv('GOOGLE_BOOKS_API_KEY')
-        )
+        from core.config import settings
         
-        cover_url = await cover_service.get_cover_url(
-            book_id=book_id,
-            title=book['title'],
-            author=book['authors'].split(',')[0].strip()
-        )
+        # Get cover URL (from cache only - don't fetch to avoid blocking)
+        # Cover will be fetched by background job if needed
+        cover_url = await db.get_cover_url(book_id)
+        
+        if not cover_url:
+            logger.debug(f"No cached cover for book {book_id}, will fetch in background")
+            # Optionally trigger background fetch
+            # For now, just return None and let frontend handle placeholder
         
         # Get user context if authenticated
         user_context = None
@@ -111,11 +114,12 @@ async def get_book_details(
             in_library = await db.is_in_library(user_id, book_id)
             
             if in_library:
-                # Get library entry with review
+                # Get library entry with review (don't exclude onboarding here)
                 library_entries = await db.get_library_with_details(
                     user_id=user_id,
                     sort='added_at',
-                    rated_only=False
+                    rated_only=False,
+                    exclude_onboarding=False  # Include onboarding books for details view
                 )
                 
                 # Find this book

@@ -65,6 +65,6 @@ echo ""
 echo -e "${GREEN}Services:${NC}"
 echo "  Backend API: http://localhost:8000"
 echo "  API Docs: http://localhost:8000/docs"
-echo "  Frontend: http://localhost:3000"
+echo "  Frontend: http://localhost:${FRONTEND_PORT:-80}"
 echo "  PostgreSQL: localhost:5432"
 

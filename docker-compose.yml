@@ -27,6 +27,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
+    image: rag-backend:latest
     container_name: rag-backend
     environment:
       MISTRAL_API_KEY: ${MISTRAL_API_KEY}
@@ -55,6 +56,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
+    image: rag-frontend:latest
     container_name: rag-frontend
     environment:
       VITE_API_URL: http://localhost:${BACKEND_PORT:-8000}
@@ -72,6 +74,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.telegram-bot
+    image: rag-telegram-bot:latest
     container_name: rag-telegram-bot
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}

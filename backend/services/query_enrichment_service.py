@@ -99,7 +99,7 @@ Final enriched query:"""
         self.client = Mistral(api_key=api_key)
         self.model = model
 
-    def is_query_vague(self, query: str) -> bool:
+    async def is_query_vague(self, query: str) -> bool:
         """
         Determine if a query is too vague and needs clarification
 
@@ -134,19 +134,19 @@ Final enriched query:"""
         ]
         if any(phrase in query_lower for phrase in vague_phrases):
             # Use LLM for final decision
-            return self._llm_vagueness_check(query)
+            return await self._llm_vagueness_check(query)
 
         # If query has some length and specificity, it's probably clear
         if len(words) >= 3:
             return False
 
         # Use LLM for borderline cases
-        return self._llm_vagueness_check(query)
+        return await self._llm_vagueness_check(query)
 
-    def _llm_vagueness_check(self, query: str) -> bool:
+    async def _llm_vagueness_check(self, query: str) -> bool:
         """Use LLM to determine if query is vague"""
         try:
-            response = self.client.chat.complete(
+            response = await self.client.chat.complete_async(
                 model=self.model,
                 messages=[{
                     "role": "user",
@@ -162,7 +162,7 @@ Final enriched query:"""
             # If LLM fails, assume query is clear to avoid blocking user
             return False
 
-    def generate_clarifying_questions(self, query: str) -> str:
+    async def generate_clarifying_questions(self, query: str) -> str:
         """
         Generate friendly clarifying questions for a vague query
 
@@ -173,7 +173,7 @@ Final enriched query:"""
             String with 2-3 clarifying questions
         """
         try:
-            response = self.client.chat.complete(
+            response = await self.client.chat.complete_async(
                 model=self.model,
                 messages=[{
                     "role": "user",
@@ -192,7 +192,7 @@ Final enriched query:"""
 2. What's the mood? Something light or more serious?
 3. Any favorite authors?"""
 
-    def enrich_query_with_context(self, original_query: str, user_context: str) -> str:
+    async def enrich_query_with_context(self, original_query: str, user_context: str) -> str:
         """
         Combine original query with user's additional context
 
@@ -204,7 +204,7 @@ Final enriched query:"""
             Enriched query combining both
         """
         try:
-            response = self.client.chat.complete(
+            response = await self.client.chat.complete_async(
                 model=self.model,
                 messages=[{
                     "role": "user",

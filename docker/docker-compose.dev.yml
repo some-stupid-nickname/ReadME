@@ -25,12 +25,12 @@ services:
     build:
       target: builder
     volumes:
-      - ../frontend:/app
+      - ../frontend-web:/app
       - /app/node_modules
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
       - "${FRONTEND_HMR_PORT:-5173}:5173"
-    command: npm run dev || npm start || echo "No dev command found"
+    command: npm run dev
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
@@ -47,5 +47,5 @@ services:
   telegram-bot:
     volumes:
       - ../telegram-bot:/app
-    command: python main.py || echo "Bot not implemented yet"
+    command: python bot.py
 

@@ -1,4 +1,3 @@
-"""Search endpoints for book recommendations"""
 from fastapi import APIRouter, HTTPException, Depends
 from models.schemas import (
     SearchRequest, SearchResponse, BookInfo,
@@ -15,8 +14,8 @@ from models.book import Book
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
-def book_to_book_info(book: Book, score: float) -> BookInfo:
-    """Convert Book model to BookInfo schema"""
+async def book_to_book_info(book: Book, score: float, db) -> BookInfo:
+    """Convert Book model to BookInfo schema with cover URL"""
     # Extract category as genres list
     genres = []
     if book.category:
@@ -24,13 +23,17 @@ def book_to_book_info(book: Book, score: float) -> BookInfo:
         category_clean = book.category.strip()
         if category_clean and category_clean != "Unknown":
             genres = [category_clean]
+    
+    # Get cover URL from cache
+    cover_url = await db.get_cover_url(str(book.id))
 
     return BookInfo(
-        id=f"book_{book.id}",
+        id=str(book.id),
         title=book.title,
         author=book.authors,
         genres=genres,
         description=book.description,
+        cover_url=cover_url,
         source_link=None  # Not available in current data
     )
 
@@ -38,7 +41,8 @@ def book_to_book_info(book: Book, score: float) -> BookInfo:
 @router.post("", response_model=SearchResponse, status_code=200)
 async def search_books(
     request: SearchRequest,
-    assistant: BookRAGAssistant = Depends(get_rag_assistant)
+    assistant: BookRAGAssistant = Depends(get_rag_assistant),
+    db = Depends(get_postgres_db)
 ) -> SearchResponse:
     """
     Анонимный поиск книг (БЕЗ сохранения в историю)
@@ -54,16 +58,16 @@ async def search_books(
 
     try:
         # Get RAG response and search results
-        response_text, search_results = assistant.ask(
+        response_text, search_results = await assistant.ask(
             user_query=request.query.strip(),
             top_k=10
         )
 
-        # Convert books to API format
-        books = [
-            book_to_book_info(book, score)
-            for book, score in search_results
-        ]
+        # Convert books to API format with cover URLs
+        books = []
+        for book, score in search_results:
+            book_info = await book_to_book_info(book, score, db)
+            books.append(book_info)
 
         return SearchResponse(
             response=response_text,
@@ -104,12 +108,12 @@ async def clarify_query(
         query = request.query.strip()
 
         # Check if query is vague
-        is_vague = enrichment_service.is_query_vague(query)
+        is_vague = await enrichment_service.is_query_vague(query)
 
         # Generate clarifying questions if vague
         clarifying_questions = None
         if is_vague:
-            clarifying_questions = enrichment_service.generate_clarifying_questions(query)
+            clarifying_questions = await enrichment_service.generate_clarifying_questions(query)
 
         return ClarificationResponse(
             is_vague=is_vague,
@@ -128,7 +132,8 @@ async def clarify_query(
 async def enriched_search(
     request: EnrichedSearchRequest,
     assistant: BookRAGAssistant = Depends(get_rag_assistant),
-    enrichment_service: QueryEnrichmentService = Depends(get_query_enrichment_service)
+    enrichment_service: QueryEnrichmentService = Depends(get_query_enrichment_service),
+    db = Depends(get_postgres_db)
 ) -> SearchResponse:
     """
     Search with enriched query (original query + user's additional context)
@@ -152,22 +157,22 @@ async def enriched_search(
 
     try:
         # Enrich query with user context
-        enriched_query = enrichment_service.enrich_query_with_context(
+        enriched_query = await enrichment_service.enrich_query_with_context(
             original_query=request.original_query.strip(),
             user_context=request.user_context.strip()
         )
 
         # Get RAG response with enriched query
-        response_text, search_results = assistant.ask(
+        response_text, search_results = await assistant.ask(
             user_query=enriched_query,
             top_k=10
         )
 
-        # Convert books to API format
-        books = [
-            book_to_book_info(book, score)
-            for book, score in search_results
-        ]
+        # Convert books to API format with cover URLs
+        books = []
+        for book, score in search_results:
+            book_info = await book_to_book_info(book, score, db)
+            books.append(book_info)
 
         return SearchResponse(
             response=response_text,

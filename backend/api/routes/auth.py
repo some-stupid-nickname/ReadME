@@ -71,7 +71,7 @@ async def register(
         )
     
     # Create JWT token
-    access_token = create_access_token(data={"sub": user_id})
+    access_token = create_access_token(data={"sub": str(user_id)})
     
     logger.info(f"User registered: {user_data.username} (id={user_id})")
     
@@ -115,7 +115,7 @@ async def login(
     await db.update_last_login(user['id'])
     
     # Create JWT token
-    access_token = create_access_token(data={"sub": user['id']})
+    access_token = create_access_token(data={"sub": str(user['id'])})
     
     logger.info(f"User logged in: {credentials.username} (id={user['id']})")
     

@@ -12,6 +12,7 @@ export interface BookInfo {
   author: string;
   genres: string[];
   description: string;
+  cover_url?: string | null;
   source_link?: string | null;
 }
 

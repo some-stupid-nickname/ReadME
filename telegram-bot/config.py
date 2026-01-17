@@ -21,6 +21,8 @@ else:
 
 # Telegram Bot Token
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if TELEGRAM_BOT_TOKEN:
+    TELEGRAM_BOT_TOKEN = TELEGRAM_BOT_TOKEN.strip("'\"")
 
 # Backend API URL
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000")

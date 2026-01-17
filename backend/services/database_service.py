@@ -16,11 +16,27 @@ class BookDatabase:
 
     def _load_database(self):
         """Загрузка данных из SQLite базы"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, point FROM points")
-        rows = cursor.fetchall()
-        conn.close()
+        from loguru import logger
+        import os
+        
+        if not os.path.exists(self.db_path):
+            logger.error(f"SQLite database file NOT FOUND at: {self.db_path}")
+            # Create dummy data to prevent crash
+            self.vectors = np.zeros((0, 384))
+            return
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, point FROM points")
+            rows = cursor.fetchall()
+            conn.close()
+            
+            logger.info(f"Loaded {len(rows)} books from {self.db_path}")
+        except Exception as e:
+            logger.error(f"Error loading SQLite database: {e}")
+            self.vectors = np.zeros((0, 384))
+            return
 
         vectors_list = []
 

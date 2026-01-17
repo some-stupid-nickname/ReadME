@@ -10,18 +10,26 @@ class VectorSearchEngine:
 
     def __init__(self, book_db: BookDatabase, model_name: str = "all-MiniLM-L6-v2"):
         self.book_db = book_db
-        self.encoder = SentenceTransformer(model_name)
+        # Force CPU in Docker to avoid CUDA issues and meta tensor errors
+        self.encoder = SentenceTransformer(model_name, device="cpu")
 
         # Нормализация векторов
         self.normalized_vectors = self._normalize_vectors(book_db.vectors)
 
     def _normalize_vectors(self, vectors: np.ndarray) -> np.ndarray:
         """Нормализация"""
+        if vectors is None or len(vectors) == 0:
+            return np.zeros((0, 384))
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         return vectors / (norms + 1e-10)
 
     def search(self, query: str, top_k: int = 5, category_filter: str = None) -> List[tuple]:
         """Поиск книг по запросу"""
+        if len(self.normalized_vectors) == 0:
+            from loguru import logger
+            logger.warning("Search called on empty vector database")
+            return []
+            
         # Кодирование
         query_vector = self.encoder.encode([query])[0]
         query_vector = query_vector / (np.linalg.norm(query_vector) + 1e-10)

@@ -98,7 +98,8 @@ class VectorSearchEngine:
 
     def __init__(self, book_db: BookDatabase, model_name: str = "all-MiniLM-L6-v2"):
         self.book_db = book_db
-        self.encoder = SentenceTransformer(model_name)
+        # Force CPU to avoid CUDA/meta tensor issues
+        self.encoder = SentenceTransformer(model_name, device="cpu")
 
         # Нормализация векторов
         self.normalized_vectors = self._normalize_vectors(book_db.vectors)

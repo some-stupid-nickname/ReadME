@@ -1,7 +1,7 @@
 """Configuration settings for the application"""
 import os
 from pathlib import Path
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 
@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     
     # Mistral API
     mistral_api_key: Optional[str] = None
+    
+    # Google Books API (Optional)
+    google_books_api_key: Optional[str] = None
     
     # Database paths
     books_db_path: Optional[str] = None
@@ -25,15 +28,22 @@ class Settings(BaseSettings):
         "http://localhost:5173",
     ]
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        env_file_required = False
-        extra = "ignore"  # Игнорировать дополнительные поля из .env
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        env_file_required=False,
+        extra="ignore"
+    )
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # Sanitization: strip quotes from API keys if present
+        if self.mistral_api_key:
+            self.mistral_api_key = self.mistral_api_key.strip("'\"")
+        if self.google_books_api_key:
+            self.google_books_api_key = self.google_books_api_key.strip("'\"")
+            
         # Проверка обязательных полей после загрузки
         if not self.mistral_api_key:
             raise ValueError(

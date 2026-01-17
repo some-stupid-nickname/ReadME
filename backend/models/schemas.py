@@ -34,6 +34,7 @@ class BookInfo(BaseModel):
     author: str = Field(..., description="Book author(s)")
     genres: List[str] = Field(default_factory=list, description="Book genres/categories")
     description: Optional[str] = Field(None, description="Book description")
+    cover_url: Optional[str] = Field(None, description="Book cover image URL")
     source_link: Optional[str] = Field(None, description="Source link for the book")
 
 
@@ -128,7 +129,7 @@ class OnboardingBook(BaseModel):
 
 class OnboardingComplete(BaseModel):
     """Onboarding completion request"""
-    selected_book_ids: List[str] = Field(..., min_items=3, max_items=10)
+    selected_book_ids: List[str] = Field(..., min_length=3, max_length=10)
 
 
 # ============================================================

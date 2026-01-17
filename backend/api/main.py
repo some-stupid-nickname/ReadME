@@ -34,6 +34,18 @@ async def lifespan(app: FastAPI):
         await postgres_db.connect()
         logger.info("PostgreSQL connected")
         
+        # Pre-initialize RAG assistant to avoid first-request delay
+        # This happens in background, won't block startup
+        logger.info("Pre-initializing RAG components...")
+        try:
+            from api.dependencies import get_rag_assistant
+            # Call it once to initialize the singleton
+            _ = get_rag_assistant()
+            logger.info("RAG assistant pre-initialized successfully")
+        except Exception as e:
+            logger.warning(f"Failed to pre-initialize RAG assistant: {e}")
+            logger.warning("RAG will initialize on first request instead")
+        
         # Initialize background jobs scheduler
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -100,7 +112,7 @@ async def prefetch_onboarding_covers():
         
         cover_service = CoverFetchService(
             postgres_db=postgres_db,
-            api_key=os.getenv('GOOGLE_BOOKS_API_KEY')
+            api_key=settings.google_books_api_key
         )
         
         books_to_fetch = [

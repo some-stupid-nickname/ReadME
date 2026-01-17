@@ -61,7 +61,7 @@ def transform_book_to_detail_response(
 
 @router.get("", response_model=LibraryResponse)
 async def get_library(
-    sort: str = Query('added_at', regex='^(added_at|rating|alphabetical)$'),
+    sort: str = Query('added_at', pattern='^(added_at|rating|alphabetical)$'),
     rated_only: bool = Query(False),
     current_user: dict = Depends(get_current_user),
     db = Depends(get_postgres_db)
@@ -79,12 +79,15 @@ async def get_library(
     user_id = current_user['id']
     
     try:
-        # Get library entries with reviews
+        # Get library entries with reviews (excluding onboarding books by default)
         library_entries = await db.get_library_with_details(
             user_id=user_id,
             sort=sort,
-            rated_only=rated_only
+            rated_only=rated_only,
+            exclude_onboarding=True
         )
+        
+        logger.info(f"User {user_id} library: found {len(library_entries)} entries (sort={sort}, rated_only={rated_only})")
         
         if not library_entries:
             return LibraryResponse(books=[])
@@ -95,6 +98,8 @@ async def get_library(
         # Fetch book details from SQLite
         books_data = sqlite_book_service.get_books_by_ids(book_ids)
         books_by_id = {book['book_id']: book for book in books_data}
+        
+        logger.debug(f"Fetched {len(books_data)} books from SQLite for user {user_id}")
         
         # Combine data
         result_books = []
@@ -118,6 +123,7 @@ async def get_library(
             
             result_books.append(book_response)
         
+        logger.info(f"Returning {len(result_books)} books to user {user_id}")
         return LibraryResponse(books=result_books)
     
     except Exception as e:

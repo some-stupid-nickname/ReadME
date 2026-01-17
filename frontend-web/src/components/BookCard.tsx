@@ -47,7 +47,7 @@ export const BookCard: React.FC<BookCardProps> = ({
             }}
           />
         ) : null}
-        <div className={clsx('w-full h-48 bg-gray-200 rounded-lg flex items-center justify-center', coverUrl && 'hidden')}>
+        <div className={clsx('w-full h-48 bg-gray-200 rounded-lg flex items-center justify-center', (coverUrl ? 'hidden' : ''))}>
           <Book className="w-16 h-16 text-gray-400" />
         </div>
       </div>
@@ -55,9 +55,9 @@ export const BookCard: React.FC<BookCardProps> = ({
       {/* Book Info */}
       <div className="flex-1">
         <h3 className="font-semibold text-lg text-gray-900 mb-1 line-clamp-2">
-          {book.title}
+          {book.title || 'Untitled'}
         </h3>
-        <p className="text-sm text-gray-600 mb-2">{book.author}</p>
+        <p className="text-sm text-gray-600 mb-2">{book.author || 'Unknown Author'}</p>
 
         {genres.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">

@@ -17,13 +17,15 @@ export const SearchResultsPage: React.FC = () => {
   const [results, setResults] = useState<PersonalizedSearchResponse | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const { user, refreshProfile } = useAuth();
+  const { refreshProfile } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 
   useEffect(() => {
     if (query) {
       performSearch();
+      // Save query to localStorage for back navigation
+      localStorage.setItem('lastSearchQuery', query);
     }
   }, [query]);
 
@@ -105,7 +107,7 @@ export const SearchResultsPage: React.FC = () => {
             {results.books.map((book) => (
               <BookCard
                 key={book.id}
-                book={{ ...book, book_id: book.id, cover_url: null, in_library: false }}
+                book={{ ...book, book_id: book.id, in_library: false }}
                 onAddToLibrary={handleAddToLibrary}
                 onViewDetails={handleViewDetails}
               />

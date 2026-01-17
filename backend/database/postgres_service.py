@@ -108,13 +108,20 @@ class PostgresService:
             WHERE id = $1
         """, user_id)
     
-    async def get_library_count(self, user_id: int) -> int:
-        """Get count of books in user's library."""
-        count = await self.execute_val("""
+    async def get_library_count(self, user_id: int, exclude_onboarding: bool = True) -> int:
+        """
+        Get count of books in user's library.
+        
+        Args:
+            exclude_onboarding: if True, exclude books added during onboarding (default: True)
+        """
+        where_clause = "AND source != 'onboarding'" if exclude_onboarding else ""
+        query = f"""
             SELECT COUNT(*)
             FROM user_library
-            WHERE user_id = $1
-        """, user_id)
+            WHERE user_id = $1 {where_clause}
+        """
+        count = await self.execute_val(query, user_id)
         return count or 0
     
     # ============================================================
@@ -169,13 +176,20 @@ class PostgresService:
         
         logger.info(f"User {user_id} removed book {book_id} from library")
     
-    async def get_user_library_book_ids(self, user_id: int) -> List[str]:
-        """Get list of book IDs in user's library."""
-        rows = await self.execute("""
+    async def get_user_library_book_ids(self, user_id: int, exclude_onboarding: bool = True) -> List[str]:
+        """
+        Get list of book IDs in user's library.
+        
+        Args:
+            exclude_onboarding: if True, exclude books added during onboarding (default: True)
+        """
+        where_clause = "AND source != 'onboarding'" if exclude_onboarding else ""
+        query = f"""
             SELECT book_id
             FROM user_library
-            WHERE user_id = $1
-        """, user_id)
+            WHERE user_id = $1 {where_clause}
+        """
+        rows = await self.execute(query, user_id)
         return [row['book_id'] for row in rows]
     
     async def is_in_library(self, user_id: int, book_id: str) -> bool:
@@ -192,7 +206,8 @@ class PostgresService:
         self,
         user_id: int,
         sort: str = 'added_at',
-        rated_only: bool = False
+        rated_only: bool = False,
+        exclude_onboarding: bool = True
     ) -> List[Dict[str, Any]]:
         """
         Get user's library with book details and reviews.
@@ -200,6 +215,7 @@ class PostgresService:
         Args:
             sort: 'added_at', 'rating', 'alphabetical'
             rated_only: if True, only return books with ratings
+            exclude_onboarding: if True, exclude books added during onboarding (default: True)
         """
         order_clause = {
             'added_at': 'ul.added_at DESC',
@@ -207,7 +223,15 @@ class PostgresService:
             'alphabetical': 'ul.book_id ASC'  # Will sort by book_id as proxy
         }.get(sort, 'ul.added_at DESC')
         
-        where_clause = "AND ur.rating IS NOT NULL" if rated_only else ""
+        where_clauses = []
+        if rated_only:
+            where_clauses.append("ur.rating IS NOT NULL")
+        if exclude_onboarding:
+            where_clauses.append("ul.source != 'onboarding'")
+        
+        where_clause = ""
+        if where_clauses:
+            where_clause = "AND " + " AND ".join(where_clauses)
         
         query = f"""
             SELECT 

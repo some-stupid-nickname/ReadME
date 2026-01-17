@@ -9,7 +9,6 @@ import type {
   UserProfile,
   OnboardingBook,
   OnboardingComplete,
-  SearchRequest,
   SearchResponse,
   PersonalizedSearchResponse,
   LibraryResponse,

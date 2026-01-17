@@ -10,33 +10,58 @@ from services.query_enrichment_service import QueryEnrichmentService
 from database.postgres_service import postgres_db
 from core.config import settings, get_books_db_path
 from core.security import decode_access_token
+from loguru import logger
 
 # HTTP Bearer token security scheme
 security = HTTPBearer()
 
+# Global instances - initialize once at module level (not on first request)
+_rag_assistant_instance = None
+_query_enrichment_instance = None
 
-@lru_cache()
+
 def get_rag_assistant() -> BookRAGAssistant:
     """
     Get or create RAG assistant instance (singleton pattern)
     This function is cached, so the same instance is reused across requests
     """
-    db_path = get_books_db_path()
-    book_db = BookDatabase(db_path)
-    search_engine = VectorSearchEngine(book_db)
-    return BookRAGAssistant(
-        search_engine=search_engine,
-        api_key=settings.mistral_api_key
-    )
+    global _rag_assistant_instance
+    
+    if _rag_assistant_instance is None:
+        logger.info("Initializing RAG assistant (first time)...")
+        db_path = get_books_db_path()
+        
+        logger.info(f"Loading book database from: {db_path}")
+        book_db = BookDatabase(db_path)
+        logger.info(f"Loaded {len(book_db.books)} books")
+        
+        logger.info("Initializing vector search engine...")
+        search_engine = VectorSearchEngine(book_db)
+        logger.info("Vector search engine ready")
+        
+        logger.info("Initializing RAG assistant...")
+        _rag_assistant_instance = BookRAGAssistant(
+            search_engine=search_engine,
+            api_key=settings.mistral_api_key
+        )
+        logger.info("RAG assistant ready")
+    
+    return _rag_assistant_instance
 
 
-@lru_cache()
 def get_query_enrichment_service() -> QueryEnrichmentService:
     """
     Get or create query enrichment service instance (singleton pattern)
     This function is cached, so the same instance is reused across requests
     """
-    return QueryEnrichmentService(api_key=settings.mistral_api_key)
+    global _query_enrichment_instance
+    
+    if _query_enrichment_instance is None:
+        logger.info("Initializing query enrichment service...")
+        _query_enrichment_instance = QueryEnrichmentService(api_key=settings.mistral_api_key)
+        logger.info("Query enrichment service ready")
+    
+    return _query_enrichment_instance
 
 
 # ============================================================
@@ -76,11 +101,20 @@ async def get_current_user(
         )
     
     # Extract user_id from token
-    user_id: Optional[int] = payload.get("sub")
-    if user_id is None:
+    user_id_str = payload.get("sub")
+    if user_id_str is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID in token",
             headers={"WWW-Authenticate": "Bearer"},
         )
     

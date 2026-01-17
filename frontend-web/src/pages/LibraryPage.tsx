@@ -8,7 +8,6 @@ import { BookCard } from '@/components/BookCard';
 import { Button } from '@/components/ui/Button';
 import { libraryAPI } from '@/services/api';
 import { useToast } from '@/hooks/useToast';
-import { useAuth } from '@/contexts/AuthContext';
 import type { BookDetail } from '@/types';
 
 export const LibraryPage: React.FC = () => {
@@ -16,7 +15,6 @@ export const LibraryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<string>('added_at');
   
-  const { refreshProfile } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -33,17 +31,6 @@ export const LibraryPage: React.FC = () => {
       toast.error('Failed to load library');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleRemoveFromLibrary = async (bookId: string) => {
-    try {
-      await libraryAPI.removeBook(bookId);
-      toast.success('Removed from library');
-      await refreshProfile();
-      loadLibrary();
-    } catch (error) {
-      toast.error('Failed to remove book');
     }
   };
 
