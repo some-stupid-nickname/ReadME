@@ -161,7 +161,7 @@ class VectorDBSetup:
                 publisher = row.get('Publisher') or None
                 price = row.get('Price Starting With ($)') or 0.0
                 pub_month = row.get('Publish Date (Month)') or None
-                
+
                 # Handle publication year/date with robust parsing
                 pub_date = row.get('Publish Date (Year)') or row.get('publication_date')
                 pub_year = None
@@ -175,7 +175,7 @@ class VectorDBSetup:
                         clean_year = ''.join(c for c in pub_date_str if c.isdigit())
                         if clean_year:
                             pub_year = int(clean_year)
-                
+
                 # Create payload with capitalized field names (matching Book model expectations)
                 payload = {
                     'Title': title,
@@ -246,7 +246,7 @@ class VectorDBSetup:
 def main():
     """Main entry point"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='Build vector database for book recommendations')
     parser.add_argument('--data', default='../processed/book_data_prepared.xlsx',
                       help='Path to Excel file with book data')
@@ -258,14 +258,14 @@ def main():
                       help='Batch size for processing')
 
     args = parser.parse_args()
-    
+
     # Default to persistent storage in backend/qdrant_storage if no URL specified
     qdrant_path = args.qdrant_url
     if not qdrant_path:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         qdrant_path = os.path.join(script_dir, "../../backend/qdrant_storage")
         qdrant_path = os.path.normpath(qdrant_path)
-    
+
     # You can customize these parameters
     # Path will be resolved relative to script location
     setup = VectorDBSetup(
