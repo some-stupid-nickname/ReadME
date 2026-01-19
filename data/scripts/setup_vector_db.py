@@ -56,8 +56,13 @@ class VectorDBSetup:
 
         # Initialize Qdrant client
         if qdrant_url:
-            print(f"Connecting to Qdrant at {qdrant_url}")
-            self.client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+            # Check if it's a local path (for persistent storage) or a URL
+            if os.path.exists(qdrant_url) or not qdrant_url.startswith(('http://', 'https://')):
+                print(f"Using persistent Qdrant storage at {qdrant_url}")
+                self.client = QdrantClient(path=qdrant_url)
+            else:
+                print(f"Connecting to Qdrant at {qdrant_url}")
+                self.client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
         else:
             print("Using in-memory Qdrant instance")
             self.client = QdrantClient(":memory:")
@@ -148,9 +153,40 @@ class VectorDBSetup:
 
             # Create points for Qdrant
             for i, (_, row) in enumerate(batch_df.iterrows()):
-                # Convert row to dict and handle NaN values
-                payload = row.to_dict()
-                payload = {k: (v if pd.notna(v) else None) for k, v in payload.items()}
+                # Map Excel columns to expected database fields (matching database_service.py expectations)
+                title = row.get('Title') or row.get('title') or 'Unknown'
+                author = row.get('Authors') or row.get('author') or 'Unknown'
+                description = row.get('Description') or row.get('description') or None
+                genre = row.get('Category') or row.get('genre') or 'Unknown'
+                publisher = row.get('Publisher') or None
+                price = row.get('Price Starting With ($)') or 0.0
+                pub_month = row.get('Publish Date (Month)') or None
+
+                # Handle publication year/date with robust parsing
+                pub_date = row.get('Publish Date (Year)') or row.get('publication_date')
+                pub_year = None
+                if pub_date and pd.notna(pub_date):
+                    pub_date_str = str(pub_date)
+                    # Extract year from date strings like '1945-08-17' or handle edge cases like '2000*'
+                    if '-' in pub_date_str:
+                        pub_year = int(pub_date_str.split('-')[0])
+                    else:
+                        # Remove any non-numeric characters (e.g., '2000*' -> '2000')
+                        clean_year = ''.join(c for c in pub_date_str if c.isdigit())
+                        if clean_year:
+                            pub_year = int(clean_year)
+
+                # Create payload with capitalized field names (matching Book model expectations)
+                payload = {
+                    'Title': title,
+                    'Authors': author,
+                    'Description': description,
+                    'Category': genre,
+                    'Publisher': publisher,
+                    'Price Starting With ($)': price,
+                    'Publish Date (Month)': pub_month,
+                    'Publish Date (Year)': pub_year
+                }
 
                 point = PointStruct(
                     id=idx + i,
@@ -209,13 +245,35 @@ class VectorDBSetup:
 
 def main():
     """Main entry point"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Build vector database for book recommendations')
+    parser.add_argument('--data', default='../processed/book_data_prepared.xlsx',
+                      help='Path to Excel file with book data')
+    parser.add_argument('--collection', default='books',
+                      help='Name of the Qdrant collection')
+    parser.add_argument('--qdrant-url', default=None,
+                      help='Qdrant server URL or path for persistent storage')
+    parser.add_argument('--batch-size', type=int, default=100,
+                      help='Batch size for processing')
+
+    args = parser.parse_args()
+
+    # Default to persistent storage in backend/qdrant_storage if no URL specified
+    qdrant_path = args.qdrant_url
+    if not qdrant_path:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        qdrant_path = os.path.join(script_dir, "../../backend/qdrant_storage")
+        qdrant_path = os.path.normpath(qdrant_path)
+
     # You can customize these parameters
     # Path will be resolved relative to script location
     setup = VectorDBSetup(
-        excel_path="../processed/book_data_prepared.xlsx",
-        collection_name="books",
+        excel_path=args.data if args.data else "../processed/book_data_prepared.xlsx",
+        collection_name=args.collection,
+        qdrant_url=qdrant_path,
         embedding_model="all-MiniLM-L6-v2",  # Fast and efficient model
-        batch_size=100
+        batch_size=args.batch_size
     )
 
     setup.run()
